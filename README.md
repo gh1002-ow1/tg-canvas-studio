@@ -20,7 +20,7 @@ This repo is deployed as an independent project at:
 
 Runtime secrets are loaded from:
 
-- `/etc/tg-canvas/<instance>.env` (recommended `chmod 600`)
+- `/home/joker/projects/tg-canvas-studio/.env` (recommended `chmod 600`)
 
 ## Quick Start
 
@@ -224,38 +224,24 @@ Returns server uptime, active WebSocket client count, and whether a canvas state
 1) Copy the unit file and adjust paths if needed:
 
 ```bash
-sudo cp tg-canvas.service /etc/systemd/system/tg-canvas.service
+sudo cp systemd/tg-canvas@.service /etc/systemd/system/
+sudo cp systemd/ttyd-canvas@.service /etc/systemd/system/
+sudo cp systemd/cloudflared-canvas@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
-2) Store runtime secrets outside repo:
+2) Store runtime secrets in repo-local `.env`:
 
 ```bash
-sudo mkdir -p /etc/tg-canvas
-sudo cp .env /etc/tg-canvas/.env
-sudo chown root:root /etc/tg-canvas/.env
-sudo chmod 600 /etc/tg-canvas/.env
+cp .env.example .env
+chmod 600 .env
 ```
 
-3) Use external env file in unit:
-
-```ini
-EnvironmentFile=/etc/tg-canvas/.env
-```
-
-4) Enable and start canvas service:
+3) Enable and start services:
 
 ```bash
-sudo systemctl enable --now tg-canvas.service
-sudo systemctl status tg-canvas.service
-```
-
-5) Run dedicated tunnel + ttyd services:
-
-```bash
-sudo systemctl enable --now cloudflared-canvas.service
-sudo systemctl enable --now ttyd-canvas.service
-sudo systemctl status cloudflared-canvas.service ttyd-canvas.service
+sudo systemctl enable --now tg-canvas@main.service ttyd-canvas@main.service cloudflared-canvas@main.service
+sudo systemctl status tg-canvas@main.service ttyd-canvas@main.service cloudflared-canvas@main.service
 ```
 
 ## Multi-Instance (Templates)
@@ -275,13 +261,12 @@ sudo cp systemd/cloudflared-canvas@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
-Create per-instance runtime env files:
+Create per-instance runtime env files (one repo folder per instance):
 
 ```bash
-sudo mkdir -p /etc/tg-canvas
-sudo cp .env.example /etc/tg-canvas/main.env
-sudo cp .env.example /etc/tg-canvas/bot2.env
-sudo chmod 600 /etc/tg-canvas/main.env /etc/tg-canvas/bot2.env
+cp -r /home/joker/projects/tg-canvas-studio /home/joker/projects/tg-canvas-studio-bot2
+cp /home/joker/projects/tg-canvas-studio/.env.example /home/joker/projects/tg-canvas-studio-bot2/.env
+chmod 600 /home/joker/projects/tg-canvas-studio/.env /home/joker/projects/tg-canvas-studio-bot2/.env
 ```
 
 Each instance must define unique values:
@@ -319,10 +304,10 @@ Each instance must have its own:
 - tunnel + hostname mapping (separate Cloudflare tunnel ingress)
 
 Recommended layout:
-- `/etc/tg-canvas/inst-a.env`, `/etc/tg-canvas/inst-b.env`
-- `tg-canvas@inst-a.service`, `tg-canvas@inst-b.service`
-- `ttyd-canvas@inst-a.service`, `ttyd-canvas@inst-b.service` (different ttyd ports)
-- `cloudflared-canvas@inst-a.service`, `cloudflared-canvas@inst-b.service`
+- `/home/joker/projects/tg-canvas-studio/.env`, `/home/joker/projects/tg-canvas-studio-bot2/.env`
+- `tg-canvas@main.service`, `tg-canvas@bot2.service`
+- `ttyd-canvas@main.service`, `ttyd-canvas@bot2.service` (different ttyd ports)
+- `cloudflared-canvas@main.service`, `cloudflared-canvas@bot2.service`
 
 Important:
 - Do not reuse the same `PORT` / ttyd port across instances.

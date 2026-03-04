@@ -11,18 +11,10 @@
     {
       "id": "open-workspace",
       "type": "navigate",
-      "label": "Workspace",
+      "label": "Projects",
       "icon": "💼",
-      "description": "打开工作区",
-      "path": "workspace"
-    },
-    {
-      "id": "open-docs",
-      "type": "navigate",
-      "label": "文档",
-      "icon": "📚",
-      "description": "打开文档目录",
-      "path": "workspace/docs"
+      "description": "打开Projects目录",
+      "path": "/home/joker/projects"
     },
     {
       "id": "git-status",
@@ -30,7 +22,7 @@
       "label": "Git 状态",
       "icon": "🔍",
       "description": "查看 Git 状态",
-      "command": "fixed:git-status"
+      "command": "git status"
     },
     {
       "id": "git-log",
@@ -38,7 +30,7 @@
       "label": "Git 日志",
       "icon": "📝",
       "description": "查看最近的提交",
-      "command": "fixed:git-log"
+      "command": "git log --oneline -10"
     },
     {
       "id": "openclaw-status",
@@ -46,7 +38,7 @@
       "label": "OpenClaw 状态",
       "icon": "🤖",
       "description": "检查 OpenClaw 状态",
-      "command": "fixed:openclaw-status"
+      "command": "openclaw models status"
     },
     {
       "id": "server-logs",
@@ -54,7 +46,7 @@
       "label": "查看日志",
       "icon": "📋",
       "description": "查看最近的日志",
-      "command": "fixed:server-logs"
+      "command": "tail -50 /home/joker/projects/tg-canvas-studio/logs/tg-canvas-main.log"
     },
     {
       "id": "check-services",
@@ -62,7 +54,15 @@
       "label": "服务状态",
       "icon": "🔧",
       "description": "检查服务运行状态",
-      "command": "fixed:check-services"
+      "command": "systemctl --no-pager --type=service --state=running | rg -n \"(tg-canvas|ttyd-canvas|cloudflared-canvas)\" || true"
+    },
+    {
+      "id": "cmd-1772594747739",
+      "type": "terminal",
+      "label": "ogs",
+      "icon": "⚡",
+      "description": "openclaw gateway status",
+      "command": "openclaw gateway status"
     }
   ]
 }

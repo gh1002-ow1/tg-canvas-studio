@@ -71,6 +71,8 @@ Runtime secrets are loaded from:
 - `ENABLE_OPENCLAW_PROXY` is **off by default**. Only enable it intentionally.
 - `ALLOW_COMMANDS_WRITE` is **off by default** (`false`). Keep it disabled in production so authenticated users cannot edit `miniapp/commands.json` over HTTP.
 - `COMMAND_RUN_ALLOWLIST` should list allowed terminal command IDs (comma-separated). Use `*` only for trusted local debugging.
+- Quick Commands terminal execution uses fixed server-side mappings (`id -> fixed command`) and does not execute `miniapp/commands.json` command text directly.
+- This hardening only applies to Quick Commands execution (`/api/commands/run`), not to interactive `ttyd` terminal sessions.
 
 ## HTTPS via nginx + Let's Encrypt (domain-based, no Cloudflare)
 
@@ -292,6 +294,7 @@ Each instance must define unique values:
 - `PUSH_TOKEN`
 - `CLOUDFLARED_TUNNEL` (named tunnel ID/name)
 - `COMMAND_RUN_ALLOWLIST` (allowed terminal command ids)
+  - built-in ids: `git-status`, `git-log`, `openclaw-status`, `server-logs`, `check-services`
 
 Start instances:
 

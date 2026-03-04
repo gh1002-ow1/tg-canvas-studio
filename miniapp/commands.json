@@ -3,10 +3,10 @@
     {
       "id": "open-openclaw",
       "type": "navigate",
-      "label": "OpenClaw",
+      "label": "Projects",
       "icon": "🏠",
-      "description": "打开 OpenClaw 目录",
-      "path": "/home/joker/.openclaw"
+      "description": "打开 Projects 目录",
+      "path": "/home/joker/projects"
     },
     {
       "id": "open-workspace",
@@ -30,7 +30,7 @@
       "label": "Git 状态",
       "icon": "🔍",
       "description": "查看 Git 状态",
-      "command": "cd /home/joker/.openclaw && git status"
+      "command": "fixed:git-status"
     },
     {
       "id": "git-log",
@@ -38,7 +38,7 @@
       "label": "Git 日志",
       "icon": "📝",
       "description": "查看最近的提交",
-      "command": "cd /home/joker/.openclaw && git log --oneline -10"
+      "command": "fixed:git-log"
     },
     {
       "id": "openclaw-status",
@@ -46,7 +46,7 @@
       "label": "OpenClaw 状态",
       "icon": "🤖",
       "description": "检查 OpenClaw 状态",
-      "command": "openclaw models status"
+      "command": "fixed:openclaw-status"
     },
     {
       "id": "server-logs",
@@ -54,7 +54,7 @@
       "label": "查看日志",
       "icon": "📋",
       "description": "查看最近的日志",
-      "command": "tail -50 /tmp/tg-canvas.log"
+      "command": "fixed:server-logs"
     },
     {
       "id": "check-services",
@@ -62,7 +62,7 @@
       "label": "服务状态",
       "icon": "🔧",
       "description": "检查服务运行状态",
-      "command": "pgrep -a cloudflared && pgrep -f 'node server.js' && echo '✅ 所有服务正常' || echo '❌ 有服务未运行'"
+      "command": "fixed:check-services"
     }
   ]
 }

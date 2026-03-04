@@ -817,11 +817,11 @@
   async function resetCommands() {
     if (confirm('Reset to default commands? This will discard your changes.')) {
       const defaultCommands = [
-        { id: 'open-openclaw', type: 'navigate', label: 'OpenClaw', icon: '🏠', description: '打开 OpenClaw 目录', path: 'workspace/skills/openclaw-tg-canvas' },
+        { id: 'open-openclaw', type: 'navigate', label: 'Projects', icon: '🏠', description: '打开 Projects 目录', path: '/home/joker/projects' },
         { id: 'open-workspace', type: 'navigate', label: 'Workspace', icon: '💼', description: '打开工作区', path: 'workspace' },
         { id: 'open-docs', type: 'navigate', label: '文档', icon: '📚', description: '打开文档目录', path: 'workspace/docs' },
-        { id: 'git-status', type: 'terminal', label: 'Git 状态', icon: '🔍', description: '查看 Git 状态', command: 'cd /home/joker/.openclaw && git status' },
-        { id: 'git-log', type: 'terminal', label: 'Git 日志', icon: '📝', description: '查看最近的提交', command: 'cd /home/joker/.openclaw && git log --oneline -10' },
+        { id: 'git-status', type: 'terminal', label: 'Git 状态', icon: '🔍', description: '查看 Git 状态', command: 'fixed:git-status' },
+        { id: 'git-log', type: 'terminal', label: 'Git 日志', icon: '📝', description: '查看最近的提交', command: 'fixed:git-log' },
       ];
       localCommands = [...defaultCommands];
       renderCommandsList();

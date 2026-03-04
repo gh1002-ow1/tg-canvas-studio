@@ -45,6 +45,20 @@ const COMMAND_RUN_ALLOWLIST = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
+const PROJECT_ROOT = __dirname;
+
+function fixedCommandById(commandId, workspaceRoot) {
+  const root = workspaceRoot || process.env.HOME || "/";
+  const projectLogs = path.join(PROJECT_ROOT, "logs");
+  const map = {
+    "git-status": `cd ${JSON.stringify(root)} && git status`,
+    "git-log": `cd ${JSON.stringify(root)} && git log --oneline -10`,
+    "openclaw-status": "openclaw models status",
+    "server-logs": `tail -50 ${JSON.stringify(path.join(projectLogs, "tg-canvas-main.log"))}`,
+    "check-services": "systemctl --no-pager --type=service --state=running | rg -n \"(tg-canvas|ttyd-canvas|cloudflared-canvas)\" || true",
+  };
+  return map[commandId] || "";
+}
 
 // ---- Startup validation ----
 // PUSH_TOKEN is required because cloudflared (and similar tunnels) forward
@@ -544,7 +558,7 @@ const server = http.createServer(async (req, res) => {
         if (!cmd) {
           return sendJson(res, 404, { error: "Command not found" });
         }
-        if (cmd.type !== "terminal" || !cmd.command) {
+        if (cmd.type !== "terminal") {
           return sendJson(res, 400, { error: "Command is not executable" });
         }
         if (!COMMAND_RUN_ALLOW_ALL && !COMMAND_RUN_ALLOWLIST.has(commandId)) {
@@ -556,9 +570,16 @@ const server = http.createServer(async (req, res) => {
         }
 
         const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
+        const fixedCommand = fixedCommandById(commandId, workspaceRoot);
+        if (!fixedCommand) {
+          return sendJson(res, 403, {
+            error: "Command id has no fixed command mapping",
+            id: commandId,
+          });
+        }
         const started = Date.now();
         exec(
-          cmd.command,
+          fixedCommand,
           {
             cwd: workspaceRoot,
             shell: "/bin/bash",

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OpenClaw Canvas</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/miniapp/style.css?v=20260303015" />
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css" />
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/python/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/shell/shell.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/markdown/markdown.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/yaml/yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/javascript/javascript.min.js"></script>
+    <!-- CodeMirror search addon -->
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/searchcursor.js"></script>
+  </head>
+  <body>
+    <div id="app" class="app">
+      <header class="topbar">
+        <div class="title-wrap">
+          <div class="title">OpenClaw Canvas</div>
+          <div id="lastUpdated" class="subtitle">Last updated —</div>
+        </div>
+        <div class="status" role="status" aria-live="polite">
+          <span id="connDot" class="conn-dot" aria-hidden="true"></span>
+          <span id="connText" class="conn-text">Connecting…</span>
+        </div>
+        <div class="topbar-actions">
+          <button id="openHomeBtn" class="button" style="padding:6px 10px;">🏠</button>
+          <button id="openFilesBtn" class="button" style="padding:6px 10px;">Files</button>
+          <button id="openTerminalBtn" class="button" style="padding:6px 10px;">Terminal</button>
+          <button id="openControlBtn" class="button" style="padding:6px 10px;">Control</button>
+        </div>
+      </header>
+
+      <main id="content" class="content" role="main">
+        <div class="content-inner">
+          <!-- Dynamic content rendered here -->
+        </div>
+      </main>
+
+      <!-- File browser overlay -->
+      <div id="files-pane" class="files-pane" style="display:none" aria-label="File Browser">
+        <div class="files-topbar">
+          <span class="files-topbar-title">📁 Files</span>
+          <div class="files-topbar-path" id="currentPath">/</div>
+          <button id="closeFilesBtn" class="files-close-btn" aria-label="Close file browser">✕</button>
+        </div>
+        <div class="files-container">
+          <div class="search-bar">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search files..." />
+            <select id="searchType" class="search-select">
+              <option value="name">Name</option>
+              <option value="content">Content</option>
+              <option value="all">Both</option>
+            </select>
+            <select id="searchExt" class="search-select">
+              <option value="">All Files</option>
+              <option value="md">Markdown</option>
+              <option value="json">JSON</option>
+              <option value="js,ts">JavaScript</option>
+              <option value="py">Python</option>
+            </select>
+            <button id="searchBtn" class="button primary" style="padding:4px 8px;">🔍</button>
+            <button id="clearSearchBtn" class="button" style="padding:4px 8px;">✕</button>
+          </div>
+          <div id="search-results" class="search-results" style="display:none"></div>
+          <div id="file-tree" class="file-tree"></div>
+        </div>
+      </div>
+
+      <!-- Editor overlay -->
+      <div id="editor-pane" class="editor-pane" style="display:none" aria-label="Editor">
+        <div class="editor-topbar">
+          <button id="editorBackBtn" class="editor-back-btn" aria-label="Back to files">←</button>
+          <span class="editor-topbar-title" id="editorTitle">file.js</span>
+          <div class="editor-actions">
+            <button id="editorSearchBtn" class="button" style="padding:4px 8px;font-size:12px;" title="Find in file">🔍</button>
+            <button id="editorSaveBtn" class="button primary" style="padding:4px 8px;font-size:12px;">Save</button>
+          </div>
+        </div>
+        <div id="editor-container"></div>
+        <div id="editor-status" class="editor-status">Ready</div>
+        
+        <!-- Find in file panel -->
+        <div id="find-panel" class="find-panel" style="display:none">
+          <input type="text" id="find-input" class="find-input" placeholder="Find..." />
+          <button id="find-prev-btn" class="find-btn" title="Previous">↑</button>
+          <button id="find-next-btn" class="find-btn" title="Next">↓</button>
+          <button id="find-close-btn" class="find-btn" title="Close">✕</button>
+          <div id="find-status" class="find-status"></div>
+        </div>
+      </div>
+
+      <!-- Terminal overlay — sits on top of canvas, canvas state preserved underneath -->
+      <div id="terminal-pane" class="terminal-pane" style="display:none" aria-label="Terminal">
+        <div class="terminal-topbar">
+          <span class="terminal-topbar-title">Terminal</span>
+          <button id="closeTerminalBtn" class="terminal-close-btn" aria-label="Close terminal">✕</button>
+        </div>
+        <div id="terminal-container"></div>
+      </div>
+
+      <!-- Commands Editor Modal -->
+      <div id="commands-editor-modal" class="modal-overlay" style="display:none">
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h2 class="modal-title">⚡ Quick Commands Editor</h2>
+            <button id="closeCommandsEditorBtn" class="modal-close-btn" aria-label="Close">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="commands-editor-toolbar">
+              <button id="addCommandBtn" class="button primary">➕ Add Command</button>
+              <button id="saveCommandsBtn" class="button success">💾 Save Changes</button>
+              <button id="resetCommandsBtn" class="button">🔄 Reset</button>
+            </div>
+            <div id="commands-list" class="commands-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Command Edit Form Modal -->
+      <div id="command-form-modal" class="modal-overlay" style="display:none">
+        <div class="modal-dialog modal-dialog-sm">
+          <div class="modal-header">
+            <h2 class="modal-title" id="commandFormTitle">Add Command</h2>
+            <button id="closeCommandFormBtn" class="modal-close-btn" aria-label="Close">✕</button>
+          </div>
+          <div class="modal-body">
+            <form id="command-form" class="command-form">
+              <input type="hidden" id="cmd-id" />
+              <div class="form-group">
+                <label for="cmd-type">Type</label>
+                <select id="cmd-type" class="form-select" required>
+                  <option value="navigate">Navigate (Open Folder)</option>
+                  <option value="terminal">Terminal (Run Command)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="cmd-label">Label</label>
+                <input type="text" id="cmd-label" class="form-input" placeholder="My Command" required />
+              </div>
+              <div class="form-group">
+                <label for="cmd-icon">Icon</label>
+                <input type="text" id="cmd-icon" class="form-input" placeholder="⚡" value="⚡" />
+              </div>
+              <div class="form-group">
+                <label for="cmd-description">Description</label>
+                <input type="text" id="cmd-description" class="form-input" placeholder="What does this do?" />
+              </div>
+              <div class="form-group" id="path-group">
+                <label for="cmd-path">Path</label>
+                <input type="text" id="cmd-path" class="form-input" placeholder="workspace/my-folder" />
+              </div>
+              <div class="form-group" id="command-group" style="display:none">
+                <label for="cmd-command">Command</label>
+                <input type="text" id="cmd-command" class="form-input" placeholder="echo 'Hello'" />
+              </div>
+              <div class="form-actions">
+                <button type="button" id="cancelCommandBtn" class="button">Cancel</button>
+                <button type="submit" class="button primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Ensure Telegram WebApp is ready and expanded to full height
+      if (window.Telegram && window.Telegram.WebApp) {
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+      }
+    </script>
+    <script src="/miniapp/app.js?v=20260303015"></script>
+  </body>
+</html>

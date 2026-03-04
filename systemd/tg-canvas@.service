@@ -1,0 +1,18 @@
+[Unit]
+Description=TG Canvas Server (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joker
+WorkingDirectory=/home/joker/projects/tg-canvas-studio
+EnvironmentFile=/etc/tg-canvas/%i.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5s
+StandardOutput=append:/home/joker/projects/tg-canvas-studio/logs/tg-canvas-%i.log
+StandardError=append:/home/joker/projects/tg-canvas-studio/logs/tg-canvas-%i.log
+
+[Install]
+WantedBy=multi-user.target

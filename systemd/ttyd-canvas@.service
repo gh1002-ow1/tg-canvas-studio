@@ -1,0 +1,19 @@
+[Unit]
+Description=ttyd for TG Canvas (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joker
+Group=joker
+WorkingDirectory=/home/joker/projects/tg-canvas-studio
+EnvironmentFile=/etc/tg-canvas/%i.env
+ExecStart=/bin/bash -lc '/usr/bin/ttyd -i 127.0.0.1 -p ${TTYD_PORT:-7681} -W -b /ttyd /bin/bash -li'
+Restart=always
+RestartSec=5s
+StandardOutput=append:/home/joker/projects/tg-canvas-studio/logs/ttyd-canvas-%i.log
+StandardError=append:/home/joker/projects/tg-canvas-studio/logs/ttyd-canvas-%i.log
+
+[Install]
+WantedBy=multi-user.target

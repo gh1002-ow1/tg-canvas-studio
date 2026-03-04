@@ -37,6 +37,7 @@ let OPENCLAW_GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || "";
 const TTYD_PROXY_HOST = process.env.TTYD_PROXY_HOST || "127.0.0.1";
 const TTYD_PROXY_PORT = parseInt(process.env.TTYD_PROXY_PORT || "7681", 10);
 const ALLOW_COMMANDS_WRITE = process.env.ALLOW_COMMANDS_WRITE === "true";
+const COMMAND_EXECUTION_MODE = (process.env.COMMAND_EXECUTION_MODE || "editable").trim().toLowerCase();
 const COMMAND_RUN_ALLOWLIST_RAW = String(process.env.COMMAND_RUN_ALLOWLIST || "").trim();
 const COMMAND_RUN_ALLOW_ALL = COMMAND_RUN_ALLOWLIST_RAW === "*";
 const COMMAND_RUN_ALLOWLIST = new Set(
@@ -100,6 +101,7 @@ if (COMMAND_RUN_ALLOW_ALL) {
 } else {
   console.log(`[tg-canvas] COMMAND_RUN_ALLOWLIST entries: ${COMMAND_RUN_ALLOWLIST.size}`);
 }
+console.log(`[tg-canvas] COMMAND_EXECUTION_MODE=${COMMAND_EXECUTION_MODE}`);
 
 // ---- Helpers ----
 const MINIAPP_DIR = path.join(__dirname, "miniapp");
@@ -576,27 +578,33 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 400, { error: "Command is not executable" });
         }
         const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
-        const fixedById = fixedCommandById(commandId, workspaceRoot);
-        const fixedByAlias = fixedCommandByAlias(cmd.command, workspaceRoot);
-
-        if (!COMMAND_RUN_ALLOW_ALL && !COMMAND_RUN_ALLOWLIST.has(commandId) && !fixedByAlias) {
-          return sendJson(res, 403, {
-            error: "Command id not allowed",
-            id: commandId,
-            hint: "Set COMMAND_RUN_ALLOWLIST or use a supported safe alias command",
-          });
-        }
-
-        const fixedCommand = fixedById || fixedByAlias;
-        if (!fixedCommand) {
-          return sendJson(res, 403, {
-            error: "Command has no fixed safe mapping",
-            id: commandId,
-          });
+        let execCommand = "";
+        if (COMMAND_EXECUTION_MODE === "safe") {
+          const fixedById = fixedCommandById(commandId, workspaceRoot);
+          const fixedByAlias = fixedCommandByAlias(cmd.command, workspaceRoot);
+          if (!COMMAND_RUN_ALLOW_ALL && !COMMAND_RUN_ALLOWLIST.has(commandId) && !fixedByAlias) {
+            return sendJson(res, 403, {
+              error: "Command id not allowed",
+              id: commandId,
+              hint: "Set COMMAND_RUN_ALLOWLIST or switch COMMAND_EXECUTION_MODE=editable",
+            });
+          }
+          execCommand = fixedById || fixedByAlias;
+          if (!execCommand) {
+            return sendJson(res, 403, {
+              error: "Command has no fixed safe mapping",
+              id: commandId,
+            });
+          }
+        } else {
+          execCommand = String(cmd.command || "").trim();
+          if (!execCommand) {
+            return sendJson(res, 400, { error: "Empty command text" });
+          }
         }
         const started = Date.now();
         exec(
-          fixedCommand,
+          execCommand,
           {
             cwd: workspaceRoot,
             shell: "/bin/bash",

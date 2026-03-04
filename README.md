@@ -70,9 +70,9 @@ Runtime secrets are loaded from:
 - The terminal feature grants shell access to the server as the process user. Ensure `ALLOWED_USER_IDS` is tightly controlled.
 - `ENABLE_OPENCLAW_PROXY` is **off by default**. Only enable it intentionally.
 - `ALLOW_COMMANDS_WRITE` 默认为 `true`，允许编辑命令；如需只读部署可设 `false`。
-- `COMMAND_RUN_ALLOWLIST` 应列出被允许的 terminal 命令 ID（逗号分隔）。仅在受信任的调试环境设置 `*`。
-- Quick Commands terminal execution uses fixed server-side mappings (`id -> fixed command`) and does not execute `miniapp/commands.json` command text directly.
-- This hardening only applies to Quick Commands execution (`/api/commands/run`), not to interactive `ttyd` terminal sessions.
+- `COMMAND_EXECUTION_MODE` 默认 `editable`：直接执行 UI 中保存的 `command` 文本；设为 `safe` 则改为固定安全映射执行。
+- `COMMAND_RUN_ALLOWLIST` 仅在 `COMMAND_EXECUTION_MODE=safe` 时生效，用于限制可运行的 terminal 命令 ID（逗号分隔，`*` 表示全部）。
+- `ttyd` 交互终端不受上述 quick-commands 执行模式影响。
 
 ## HTTPS via nginx + Let's Encrypt (domain-based, no Cloudflare)
 
@@ -294,6 +294,7 @@ Each instance must define unique values:
 - `PUSH_TOKEN`
 - `CLOUDFLARED_TUNNEL` (named tunnel ID/name)
 - `COMMAND_RUN_ALLOWLIST` (allowed terminal command ids)
+  - `COMMAND_EXECUTION_MODE` (`editable` or `safe`)
   - built-in ids: `git-status`, `git-log`, `openclaw-status`, `server-logs`, `check-services`
 
 Start instances:

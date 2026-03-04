@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 /*
  * Configure Telegram bot menu button and /canvas command.
- * Usage: node scripts/setup-bot.js
+ *
+ * Requirements:
+ *   - BOT_TOKEN and MINIAPP_URL must be set (env or .env in repo root)
+ *
+ * Usage:
+ *   node scripts/setup-bot.js
+ *
+ * Notes:
+ *   - setChatMenuButton sets a "Web App" menu button to open the Mini App URL.
+ *   - setMyCommands registers /canvas for quick access.
  */
 
 const fs = require('fs');

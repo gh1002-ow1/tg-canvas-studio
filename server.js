@@ -7,6 +7,7 @@
 
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const { exec } = require("child_process");
@@ -18,7 +19,31 @@ const ALLOWED_USER_IDS = (process.env.ALLOWED_USER_IDS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
+function loadJwtSecret() {
+  const fromEnv = (process.env.JWT_SECRET || "").trim();
+  if (fromEnv) return fromEnv;
+
+  const secretPath = path.join(__dirname, ".jwt-secret");
+  try {
+    if (fs.existsSync(secretPath)) {
+      const existing = fs.readFileSync(secretPath, "utf8").trim();
+      if (existing) return existing;
+    }
+  } catch (_) {
+    // Fall through to generating a secret (best-effort).
+  }
+
+  const generated = crypto.randomBytes(32).toString("hex");
+  try {
+    fs.writeFileSync(secretPath, `${generated}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    console.warn(`[tg-canvas] JWT_SECRET not set; generated and persisted secret at ${secretPath}`);
+  } catch (_) {
+    console.warn("[tg-canvas] JWT_SECRET not set; using ephemeral in-memory secret (tokens will break on restart)");
+  }
+  return generated;
+}
+
+const JWT_SECRET = loadJwtSecret();
 const JWT_TTL_SECONDS = parseInt(process.env.JWT_TTL_SECONDS || "900", 10); // 15m
 const INIT_DATA_MAX_AGE_SECONDS = parseInt(process.env.INIT_DATA_MAX_AGE_SECONDS || "300", 10); // 5m
 const PORT = parseInt(process.env.PORT || "3721", 10);
@@ -117,6 +142,14 @@ function sendJson(res, statusCode, obj) {
     "Content-Length": Buffer.byteLength(body),
   });
   res.end(body);
+}
+
+function readProcText(p) {
+  try {
+    return fs.readFileSync(p, "utf8");
+  } catch (_) {
+    return null;
+  }
 }
 
 function readBodyJson(req) {
@@ -271,12 +304,22 @@ function serveFile(res, filePath) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { 
+    const headers = {
       "Content-Type": contentTypeFor(filePath),
       "Cache-Control": "no-cache, no-store, must-revalidate",
       "Pragma": "no-cache",
-      "Expires": "0"
-    });
+      "Expires": "0",
+    };
+
+    // Telegram WebApp is embedded; allow Telegram origins to frame this app.
+    // Note: If a reverse proxy/CDN injects X-Frame-Options: SAMEORIGIN, that must be removed there.
+    if (path.extname(filePath).toLowerCase() === ".html") {
+      headers["Content-Security-Policy"] =
+        "frame-ancestors 'self' https://web.telegram.org https://webk.telegram.org https://webz.telegram.org https://t.me https://telegram.me https://*.telegram.org; " +
+        "base-uri 'self'; object-src 'none'";
+    }
+
+    res.writeHead(200, headers);
     res.end(data);
   });
 }
@@ -750,6 +793,44 @@ const server = http.createServer(async (req, res) => {
         clients: wsClients.size,
         hasState: !!currentState,
       });
+    }
+
+    // System stats endpoint (safe alternative to reading /proc via /fs/*)
+    if (req.method === "GET" && url.pathname === "/system/stats") {
+      const ip = req.socket.remoteAddress || "unknown";
+      if (!rateLimit(`stats:${ip}`, RATE_LIMIT_STATE_PER_MIN, 60_000)) {
+        return sendJson(res, 429, { error: "Rate limit" });
+      }
+
+      const token = getJwtFromRequest(req, url);
+      const payload = verifyJwt(token);
+      if (!payload) return sendJson(res, 401, { error: "Invalid token" });
+
+      const loadavgText = readProcText("/proc/loadavg");
+      const meminfoText = readProcText("/proc/meminfo");
+
+      let cpu = 0;
+      if (loadavgText) {
+        const parts = loadavgText.trim().split(/\s+/);
+        const one = parseFloat(parts[0] || "0");
+        const five = parseFloat(parts[1] || "0");
+        const fifteen = parseFloat(parts[2] || "0");
+        const cores = Math.max(1, (os.cpus() || []).length || 1);
+        const normalized = ((one + five + fifteen) / 3) / cores;
+        cpu = Math.max(0, Math.min(100, Math.round(normalized * 100)));
+      }
+
+      let memory = 0;
+      if (meminfoText) {
+        const lines = meminfoText.split("\n");
+        const totalLine = lines.find((l) => l.startsWith("MemTotal:")) || "";
+        const availLine = lines.find((l) => l.startsWith("MemAvailable:")) || "";
+        const totalKb = parseInt(totalLine.split(/\s+/)[1] || "0", 10);
+        const availKb = parseInt(availLine.split(/\s+/)[1] || "0", 10);
+        if (totalKb > 0) memory = Math.max(0, Math.min(100, Math.round(((totalKb - availKb) / totalKb) * 100)));
+      }
+
+      return sendJson(res, 200, { cpu, memory, disk: null });
     }
 
     // Push endpoint — PUSH_TOKEN required (loopback check retained as an additional layer

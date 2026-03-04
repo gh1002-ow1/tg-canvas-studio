@@ -3,6 +3,14 @@ set -euo pipefail
 
 # Expose local OpenClaw Control UI (127.0.0.1:18789) via Cloudflare quick tunnel.
 # WARNING: This creates a public URL. Treat it as sensitive.
+#
+# Usage:
+#   ./scripts/tunnel-openclaw-control.sh
+#
+# Output:
+#   - Writes logs to `./logs/cloudflared-control.log`
+#   - Writes PID to `./logs/cloudflared-control.pid`
+#   - Prints the public URL once detected
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"

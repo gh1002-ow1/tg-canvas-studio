@@ -4,3 +4,4 @@ logs/
 .env.*
 !.env.example
 .DS_Store
+.jwt-secret

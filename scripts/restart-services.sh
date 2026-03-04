@@ -8,7 +8,10 @@ set -euo pipefail
 #   2) 同时重启 canvas + ttyd + cloudflared:
 #      ./scripts/restart-services.sh all
 #   3) 不传参数默认重启 all
-# 注意: 需要 sudo 权限
+# 注意:
+#   - 需要 sudo 权限（systemctl restart）
+#   - service 名称使用 @main 实例：tg-canvas@main / ttyd-canvas@main / cloudflared-canvas@main
+#   - 如果你只部署了部分服务，使用 tg 模式即可
 
 MODE="${1:-all}"
 

@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Purpose:
+#   Local/dev helper to start:
+#     - tg-canvas `server.js`
+#     - a Cloudflare "quick tunnel" to expose the app publicly
+#
+# Requirements:
+#   - `npm` + Node.js installed
+#   - `cloudflared` installed and available on PATH
+#   - Env vars set (export or via your shell):
+#       BOT_TOKEN, ALLOWED_USER_IDS, PUSH_TOKEN
+#
+# Output:
+#   - Logs under `./logs/` (server.log, cloudflared.log)
+#   - Prints the detected tunnel URL to use as MINIAPP_URL
+#
 if [[ -z "${BOT_TOKEN:-}" ]]; then
   echo "Missing BOT_TOKEN" >&2
   exit 1

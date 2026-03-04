@@ -568,31 +568,13 @@
 
   async function loadSystemStats() {
     try {
-      // CPU from loadavg (may be restricted, use fallback)
-      try {
-        const cpuRes = await fetch(`/fs/read?path=/proc/loadavg&token=${encodeURIComponent(jwt)}`);
-        if (cpuRes?.ok) {
-          const text = await cpuRes.text();
-          const [one, five, fifteen] = text.split(' ').slice(0, 3).map(parseFloat);
-          systemStats.cpu = Math.min(100, Math.round((one + five + fifteen) / 3 * 100));
-        }
-      } catch (e) {
+      const res = await fetch(`/system/stats?token=${encodeURIComponent(jwt)}`);
+      if (res?.ok) {
+        const data = await res.json();
+        systemStats.cpu = typeof data.cpu === 'number' ? data.cpu : 0;
+        systemStats.memory = typeof data.memory === 'number' ? data.memory : 0;
+      } else {
         systemStats.cpu = 0;
-      }
-      
-      // Memory from meminfo (may be restricted, use fallback)
-      try {
-        const memRes = await fetch(`/fs/read?path=/proc/meminfo&token=${encodeURIComponent(jwt)}`);
-        if (memRes?.ok) {
-          const text = await memRes.text();
-          const lines = text.split('\n');
-          const memTotal = parseInt(lines.find(l => l.startsWith('MemTotal:'))?.split(/\s+/)[1] || '0');
-          const memAvailable = parseInt(lines.find(l => l.startsWith('MemAvailable:'))?.split(/\s+/)[1] || '0');
-          if (memTotal > 0) {
-            systemStats.memory = Math.round(((memTotal - memAvailable) / memTotal) * 100);
-          }
-        }
-      } catch (e) {
         systemStats.memory = 0;
       }
       

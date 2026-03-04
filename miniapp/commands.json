@@ -33,20 +33,12 @@
       "command": "git log --oneline -10"
     },
     {
-      "id": "openclaw-status",
-      "type": "terminal",
-      "label": "OpenClaw 状态",
-      "icon": "🤖",
-      "description": "检查 OpenClaw 状态",
-      "command": "openclaw models status"
-    },
-    {
       "id": "server-logs",
       "type": "terminal",
       "label": "查看日志",
       "icon": "📋",
       "description": "查看最近的日志",
-      "command": "tail -50 /home/joker/projects/tg-canvas-studio/logs/tg-canvas-main.log"
+      "command": "tail -50 logs/tg-canvas-main.log"
     },
     {
       "id": "check-services",
@@ -62,7 +54,15 @@
       "label": "ogs",
       "icon": "⚡",
       "description": "openclaw gateway status",
-      "command": "openclaw gateway status"
+      "command": "./scripts/openclaw-gateway-status.sh"
+    },
+    {
+      "id": "cmd-1772636085399",
+      "type": "terminal",
+      "label": "ogr",
+      "icon": "🔄",
+      "description": "openclaw gateway restart",
+      "command": "./scripts/openclaw-gateway-restart.sh"
     }
   ]
 }

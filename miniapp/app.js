@@ -706,6 +706,18 @@
     openCommandForm();
   }
 
+  function initIconPicker() {
+    const picker = document.getElementById('icon-picker');
+    const input = document.getElementById('cmd-icon');
+    if (!picker || !input) return;
+    picker.querySelectorAll('.icon-chip').forEach((btn) => {
+      btn.onclick = () => {
+        const icon = btn.getAttribute('data-icon-value') || '⚡';
+        input.value = icon;
+      };
+    });
+  }
+
   function editCommand(index) {
     const cmd = localCommands[index];
     editingCommandId = index;
@@ -768,10 +780,15 @@
     e.preventDefault();
     
     const type = document.getElementById('cmd-type').value;
+    const label = document.getElementById('cmd-label').value.trim();
+    if (!label) {
+      alert('Label is required');
+      return;
+    }
     const cmd = {
       id: document.getElementById('cmd-id').value || `cmd-${Date.now()}`,
       type: type,
-      label: document.getElementById('cmd-label').value,
+      label,
       icon: document.getElementById('cmd-icon').value || '⚡',
       description: document.getElementById('cmd-description').value || '',
     };
@@ -1452,12 +1469,14 @@
     console.log('[Canvas] boot started');
     // Initialize DOM elements
     initDOMElements();
+    initIconPicker();
 
     // Wait for DOM to be ready
     if (!contentEl) {
       console.error('[Canvas] contentEl not found, waiting...');
       await new Promise(resolve => setTimeout(resolve, 500));
       initDOMElements();
+      initIconPicker();
     }
 
     setStatus('connecting');

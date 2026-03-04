@@ -1372,6 +1372,29 @@ html, body {
   border-color: var(--tg-link);
 }
 
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.icon-chip {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--tg-secondary-bg);
+  border-radius: 8px;
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.icon-chip:hover {
+  border-color: var(--tg-link);
+  background: var(--tg-secondary-bg);
+}
+
 .form-actions {
   display: flex;
   gap: 10px;

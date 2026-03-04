@@ -69,8 +69,8 @@ Runtime secrets are loaded from:
 - Keep `BOT_TOKEN`, `JWT_SECRET`, and `PUSH_TOKEN` secret; rotate if compromised.
 - The terminal feature grants shell access to the server as the process user. Ensure `ALLOWED_USER_IDS` is tightly controlled.
 - `ENABLE_OPENCLAW_PROXY` is **off by default**. Only enable it intentionally.
-- `ALLOW_COMMANDS_WRITE` is **off by default** (`false`). Keep it disabled in production so authenticated users cannot edit `miniapp/commands.json` over HTTP.
-- `COMMAND_RUN_ALLOWLIST` should list allowed terminal command IDs (comma-separated). Use `*` only for trusted local debugging.
+- `ALLOW_COMMANDS_WRITE` 默认为 `true`，允许编辑命令；如需只读部署可设 `false`。
+- `COMMAND_RUN_ALLOWLIST` 应列出被允许的 terminal 命令 ID（逗号分隔）。仅在受信任的调试环境设置 `*`。
 - Quick Commands terminal execution uses fixed server-side mappings (`id -> fixed command`) and does not execute `miniapp/commands.json` command text directly.
 - This hardening only applies to Quick Commands execution (`/api/commands/run`), not to interactive `ttyd` terminal sessions.
 

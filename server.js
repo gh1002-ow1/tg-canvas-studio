@@ -60,6 +60,20 @@ function fixedCommandById(commandId, workspaceRoot) {
   return map[commandId] || "";
 }
 
+function fixedCommandByAlias(commandText, workspaceRoot) {
+  const root = workspaceRoot || process.env.HOME || "/";
+  const projectLogs = path.join(PROJECT_ROOT, "logs");
+  const normalized = String(commandText || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const map = {
+    "openclaw gateway status": "openclaw gateway status",
+    "openclaw models status": "openclaw models status",
+    "git status": `cd ${JSON.stringify(root)} && git status`,
+    "git log --oneline -10": `cd ${JSON.stringify(root)} && git log --oneline -10`,
+    "tail -50 tg-canvas-main.log": `tail -50 ${JSON.stringify(path.join(projectLogs, "tg-canvas-main.log"))}`,
+  };
+  return map[normalized] || "";
+}
+
 // ---- Startup validation ----
 // PUSH_TOKEN is required because cloudflared (and similar tunnels) forward
 // remote requests as loopback TCP connections, bypassing the IP-based loopback
@@ -561,19 +575,22 @@ const server = http.createServer(async (req, res) => {
         if (cmd.type !== "terminal") {
           return sendJson(res, 400, { error: "Command is not executable" });
         }
-        if (!COMMAND_RUN_ALLOW_ALL && !COMMAND_RUN_ALLOWLIST.has(commandId)) {
+        const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
+        const fixedById = fixedCommandById(commandId, workspaceRoot);
+        const fixedByAlias = fixedCommandByAlias(cmd.command, workspaceRoot);
+
+        if (!COMMAND_RUN_ALLOW_ALL && !COMMAND_RUN_ALLOWLIST.has(commandId) && !fixedByAlias) {
           return sendJson(res, 403, {
             error: "Command id not allowed",
             id: commandId,
-            hint: "Set COMMAND_RUN_ALLOWLIST to comma-separated ids or *",
+            hint: "Set COMMAND_RUN_ALLOWLIST or use a supported safe alias command",
           });
         }
 
-        const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
-        const fixedCommand = fixedCommandById(commandId, workspaceRoot);
+        const fixedCommand = fixedById || fixedByAlias;
         if (!fixedCommand) {
           return sendJson(res, 403, {
-            error: "Command id has no fixed command mapping",
+            error: "Command has no fixed safe mapping",
             id: commandId,
           });
         }

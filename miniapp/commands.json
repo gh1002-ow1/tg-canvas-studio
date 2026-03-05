@@ -54,7 +54,7 @@
       "label": "ogs",
       "icon": "⚡",
       "description": "openclaw gateway status",
-      "command": "./scripts/openclaw-gateway-status.sh"
+      "command": "~/projects/tg-canvas-studio/scripts/openclaw-gateway-status.sh"
     },
     {
       "id": "cmd-1772636085399",
@@ -62,7 +62,7 @@
       "label": "ogr",
       "icon": "🔄",
       "description": "openclaw gateway restart",
-      "command": "./scripts/openclaw-gateway-restart.sh"
+      "command": "~/projects/tg-canvas-studio/scripts/openclaw-gateway-restart.sh"
     }
   ]
 }

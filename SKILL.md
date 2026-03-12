@@ -89,13 +89,10 @@ Template services:
 Install and start:
 
 ```bash
-sudo cp systemd/tg-canvas@.service /etc/systemd/system/
-sudo cp systemd/ttyd-canvas@.service /etc/systemd/system/
-sudo cp systemd/cloudflared-canvas@.service /etc/systemd/system/
+bash scripts/install-systemd-instance.sh
 sudo mkdir -p /etc/tg-canvas
 sudo cp .env.example /etc/tg-canvas/main.env
 sudo chmod 600 /etc/tg-canvas/main.env
-sudo systemctl daemon-reload
 sudo systemctl enable --now tg-canvas@main.service ttyd-canvas@main.service cloudflared-canvas@main.service
 ```
 

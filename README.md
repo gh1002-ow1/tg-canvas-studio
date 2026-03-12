@@ -163,11 +163,13 @@ Each instance needs unique values for:
 ### Install Template Units
 
 ```bash
-sudo cp systemd/tg-canvas@.service /etc/systemd/system/
-sudo cp systemd/ttyd-canvas@.service /etc/systemd/system/
-sudo cp systemd/cloudflared-canvas@.service /etc/systemd/system/
-sudo mkdir -p /etc/tg-canvas
-sudo systemctl daemon-reload
+bash scripts/install-systemd-instance.sh
+```
+
+By default the installer renders the units for the current checkout path and current user. Override if needed:
+
+```bash
+bash scripts/install-systemd-instance.sh --user deploy --root /opt/tg-canvas-studio
 ```
 
 ### Create Instance Configs

@@ -14,6 +14,11 @@ const { exec } = require("child_process");
 const { WebSocketServer } = require("ws");
 
 // ---- Config ----
+const PROJECT_ROOT = __dirname;
+const INSTANCE_NAME = (process.env.TG_CANVAS_INSTANCE || process.env.INSTANCE_NAME || "main").trim() || "main";
+const LOG_DIR = process.env.TG_CANVAS_LOG_DIR || path.join(PROJECT_ROOT, "logs");
+const DATA_DIR = process.env.TG_CANVAS_DATA_DIR || path.join(PROJECT_ROOT, "var", INSTANCE_NAME);
+const COMMANDS_FILE = process.env.COMMANDS_FILE || path.join(DATA_DIR, "commands.json");
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const ALLOWED_USER_IDS = (process.env.ALLOWED_USER_IDS || "")
   .split(",")
@@ -23,7 +28,7 @@ function loadJwtSecret() {
   const fromEnv = (process.env.JWT_SECRET || "").trim();
   if (fromEnv) return fromEnv;
 
-  const secretPath = path.join(__dirname, ".jwt-secret");
+  const secretPath = process.env.JWT_SECRET_FILE || path.join(DATA_DIR, ".jwt-secret");
   try {
     if (fs.existsSync(secretPath)) {
       const existing = fs.readFileSync(secretPath, "utf8").trim();
@@ -35,6 +40,7 @@ function loadJwtSecret() {
 
   const generated = crypto.randomBytes(32).toString("hex");
   try {
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true, mode: 0o700 });
     fs.writeFileSync(secretPath, `${generated}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
     console.warn(`[tg-canvas] JWT_SECRET not set; generated and persisted secret at ${secretPath}`);
   } catch (_) {
@@ -71,16 +77,15 @@ const COMMAND_RUN_ALLOWLIST = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
-const PROJECT_ROOT = __dirname;
 
 function fixedCommandById(commandId, workspaceRoot) {
   const root = workspaceRoot || process.env.HOME || "/";
-  const projectLogs = path.join(PROJECT_ROOT, "logs");
+  const projectLogs = LOG_DIR;
   const map = {
     "git-status": `cd ${JSON.stringify(root)} && git status`,
     "git-log": `cd ${JSON.stringify(root)} && git log --oneline -10`,
     "openclaw-status": "openclaw models status",
-    "server-logs": `tail -50 ${JSON.stringify(path.join(projectLogs, "tg-canvas-main.log"))}`,
+    "server-logs": `tail -50 ${JSON.stringify(path.join(projectLogs, `tg-canvas-${INSTANCE_NAME}.log`))}`,
     "check-services": "systemctl --no-pager --type=service --state=running | rg -n \"(tg-canvas|ttyd-canvas|cloudflared-canvas)\" || true",
   };
   return map[commandId] || "";
@@ -88,14 +93,14 @@ function fixedCommandById(commandId, workspaceRoot) {
 
 function fixedCommandByAlias(commandText, workspaceRoot) {
   const root = workspaceRoot || process.env.HOME || "/";
-  const projectLogs = path.join(PROJECT_ROOT, "logs");
+  const projectLogs = LOG_DIR;
   const normalized = String(commandText || "").trim().toLowerCase().replace(/\s+/g, " ");
   const map = {
     "openclaw gateway status": "openclaw gateway status",
     "openclaw models status": "openclaw models status",
     "git status": `cd ${JSON.stringify(root)} && git status`,
     "git log --oneline -10": `cd ${JSON.stringify(root)} && git log --oneline -10`,
-    "tail -50 tg-canvas-main.log": `tail -50 ${JSON.stringify(path.join(projectLogs, "tg-canvas-main.log"))}`,
+    [`tail -50 tg-canvas-${INSTANCE_NAME}.log`]: `tail -50 ${JSON.stringify(path.join(projectLogs, `tg-canvas-${INSTANCE_NAME}.log`))}`,
   };
   return map[normalized] || "";
 }
@@ -120,6 +125,8 @@ if (ENABLE_OPENCLAW_PROXY) {
 } else {
   console.log('[tg-canvas] OPENCLAW_PROXY disabled (set ENABLE_OPENCLAW_PROXY=true to enable)');
 }
+console.log(`[tg-canvas] INSTANCE_NAME=${INSTANCE_NAME}`);
+console.log(`[tg-canvas] DATA_DIR=${DATA_DIR}`);
 console.log(`[tg-canvas] WORKSPACE_ROOT: ${process.env.WORKSPACE_ROOT || 'not set'}`);
 if (COMMAND_RUN_ALLOW_ALL) {
   console.log("[tg-canvas] COMMAND_RUN_ALLOWLIST=* (all terminal commands allowed)");
@@ -130,6 +137,24 @@ console.log(`[tg-canvas] COMMAND_EXECUTION_MODE=${COMMAND_EXECUTION_MODE}`);
 
 // ---- Helpers ----
 const MINIAPP_DIR = path.join(__dirname, "miniapp");
+
+function readCommandsConfig() {
+  try {
+    if (fs.existsSync(COMMANDS_FILE)) {
+      const data = fs.readFileSync(COMMANDS_FILE, "utf8");
+      return JSON.parse(data || "{}");
+    }
+  } catch (_) {
+    // Fall back to bundled defaults.
+  }
+
+  try {
+    const bundled = fs.readFileSync(path.join(MINIAPP_DIR, "commands.json"), "utf8");
+    return JSON.parse(bundled || "{}");
+  } catch (_) {
+    return { commands: [] };
+  }
+}
 
 function isLoopbackAddress(addr) {
   return addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
@@ -580,8 +605,6 @@ const server = http.createServer(async (req, res) => {
 
     // ---- Quick Commands API ----
     // Must be before static file serving to prevent /api/commands from being served as file
-    const COMMANDS_FILE = path.join(MINIAPP_DIR, "commands.json");
-
     // GET /api/commands
     if (req.method === "GET" && url.pathname === "/api/commands") {
       const token = getJwtFromRequest(req, url);
@@ -589,9 +612,7 @@ const server = http.createServer(async (req, res) => {
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
       try {
-        const data = fs.readFileSync(COMMANDS_FILE, "utf8");
-        const commands = JSON.parse(data);
-        return sendJson(res, 200, commands);
+        return sendJson(res, 200, readCommandsConfig());
       } catch (err) {
         return sendJson(res, 200, { commands: [] });
       }
@@ -610,8 +631,7 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 400, { error: "Missing command id" });
         }
 
-        const data = fs.readFileSync(COMMANDS_FILE, "utf8");
-        const parsed = JSON.parse(data || "{}");
+        const parsed = readCommandsConfig();
         const commands = Array.isArray(parsed.commands) ? parsed.commands : [];
         const cmd = commands.find((c) => c && c.id === commandId);
         if (!cmd) {
@@ -725,6 +745,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         const content = JSON.stringify(body, null, 2);
+        fs.mkdirSync(path.dirname(COMMANDS_FILE), { recursive: true, mode: 0o700 });
         fs.writeFileSync(COMMANDS_FILE, content, "utf8");
         return sendJson(res, 200, { ok: true });
       } catch (err) {

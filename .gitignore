@@ -1,5 +1,6 @@
 node_modules/
 logs/
+var/
 .env
 .env.*
 !.env.example

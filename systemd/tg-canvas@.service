@@ -7,7 +7,13 @@ Wants=network-online.target
 Type=simple
 User=joker
 WorkingDirectory=/home/joker/projects/tg-canvas-studio
-EnvironmentFile=/home/joker/projects/tg-canvas-studio/.env
+Environment=TG_CANVAS_INSTANCE=%i
+Environment=TG_CANVAS_ROOT=/home/joker/projects/tg-canvas-studio
+Environment=TG_CANVAS_LOG_DIR=/home/joker/projects/tg-canvas-studio/logs
+Environment=TG_CANVAS_DATA_DIR=/home/joker/projects/tg-canvas-studio/var/%i
+Environment=COMMANDS_FILE=/home/joker/projects/tg-canvas-studio/var/%i/commands.json
+EnvironmentFile=/etc/tg-canvas/%i.env
+ExecStartPre=/usr/bin/mkdir -p /home/joker/projects/tg-canvas-studio/logs /home/joker/projects/tg-canvas-studio/var/%i
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5s

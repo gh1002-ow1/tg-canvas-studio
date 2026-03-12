@@ -8,8 +8,10 @@ Type=simple
 User=joker
 Group=joker
 Environment=HOME=/home/joker
-EnvironmentFile=/home/joker/projects/tg-canvas-studio/.env
-ExecStart=/bin/bash -lc '/usr/local/bin/cloudflared tunnel run ${CLOUDFLARED_TUNNEL:?set_CLOUDFLARED_TUNNEL_in_/home/joker/projects/tg-canvas-studio/.env}'
+Environment=TG_CANVAS_INSTANCE=%i
+EnvironmentFile=/etc/tg-canvas/%i.env
+ExecStartPre=/usr/bin/mkdir -p /home/joker/projects/tg-canvas-studio/logs
+ExecStart=/bin/bash -lc '/usr/local/bin/cloudflared tunnel run ${CLOUDFLARED_TUNNEL:?set_CLOUDFLARED_TUNNEL_in_/etc/tg-canvas/%i.env}'
 Restart=always
 RestartSec=5s
 StandardOutput=append:/home/joker/projects/tg-canvas-studio/logs/cloudflared-canvas-%i.log

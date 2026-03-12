@@ -587,7 +587,7 @@
 
   async function loadQuickCommands() {
     try {
-      const res = await fetch('/miniapp/commands.json');
+      const res = await fetch('/api/commands?token=' + encodeURIComponent(jwt));
       if (!res.ok) throw new Error('Failed to load commands');
       const data = await res.json();
       quickCommands = data.commands || [];

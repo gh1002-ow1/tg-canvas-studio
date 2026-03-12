@@ -70,6 +70,48 @@ BOT_TOKEN=... MINIAPP_URL=https://your-miniapp.example.com node scripts/setup-bo
 
 For local development with a quick tunnel, `scripts/start.sh` can start the server and print a `trycloudflare.com` URL.
 
+## Interactive Setup
+
+Preferred setup flow:
+
+```bash
+tg-canvas setup
+```
+
+For an additional bot instance:
+
+```bash
+tg-canvas add-instance
+```
+
+What the CLI does for you:
+
+- picks the next instance name, such as `main`, `bot2`, `bot3`
+- auto-allocates a free app port and ttyd port
+- generates `JWT_SECRET` and `PUSH_TOKEN`
+- writes `/etc/tg-canvas/<instance>.env`
+- installs or refreshes the template systemd units
+- optionally starts the services
+- optionally configures the Telegram bot menu button
+
+Exposure modes in setup:
+
+- `local`: start only local services, no public URL required
+- `proxy`: use an existing public HTTPS reverse proxy or domain mapping
+- `cloudflare`: start the local services and `cloudflared-canvas@<instance>.service`
+
+Non-interactive example:
+
+```bash
+tg-canvas setup \
+  --non-interactive \
+  --instance bot2 \
+  --bot-token 123456:token \
+  --allowed-user-ids 123456789 \
+  --exposure proxy \
+  --public-url https://canvas-bot2.example.com
+```
+
 ## Required Configuration
 
 | Variable | Required | Default | Notes |

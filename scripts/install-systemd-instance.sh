@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_USER="${SUDO_USER:-${USER}}"
 PROJECT_ROOT="$ROOT_DIR"
+QUIET=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -15,8 +16,12 @@ while [[ $# -gt 0 ]]; do
       PROJECT_ROOT="${2:?missing value for --root}"
       shift 2
       ;;
+    --quiet)
+      QUIET=true
+      shift
+      ;;
     *)
-      echo "Usage: $0 [--user <service-user>] [--root <project-root>]" >&2
+      echo "Usage: $0 [--user <service-user>] [--root <project-root>] [--quiet]" >&2
       exit 1
       ;;
   esac
@@ -45,7 +50,9 @@ render_unit "$ROOT_DIR/systemd/cloudflared-canvas@.service" /etc/systemd/system/
 sudo mkdir -p /etc/tg-canvas
 sudo systemctl daemon-reload
 
-echo "Installed template units for user '$SERVICE_USER' and project root '$PROJECT_ROOT'."
-echo "Next:"
-echo "  sudo cp $ROOT_DIR/.env.example /etc/tg-canvas/main.env"
-echo "  sudo chmod 600 /etc/tg-canvas/main.env"
+if [[ "$QUIET" != "true" ]]; then
+  echo "Installed template units for user '$SERVICE_USER' and project root '$PROJECT_ROOT'."
+  echo "Next:"
+  echo "  sudo cp $ROOT_DIR/.env.example /etc/tg-canvas/main.env"
+  echo "  sudo chmod 600 /etc/tg-canvas/main.env"
+fi

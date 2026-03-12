@@ -38,14 +38,20 @@ metadata:
 npm install
 ```
 
-2. Configure local env:
+2. Prefer the interactive setup flow:
+
+```bash
+tg-canvas setup
+```
+
+3. Or configure local env manually:
 
 ```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-3. Set at least:
+4. Set at least:
 
 - `BOT_TOKEN`
 - `ALLOWED_USER_IDS`
@@ -53,19 +59,19 @@ chmod 600 .env
 - `PUSH_TOKEN`
 - `MINIAPP_URL`
 
-4. Configure the Telegram bot menu button:
+5. Configure the Telegram bot menu button:
 
 ```bash
 BOT_TOKEN=... MINIAPP_URL=https://your-miniapp.example.com node scripts/setup-bot.js
 ```
 
-5. Start the server:
+6. Start the server:
 
 ```bash
 node server.js
 ```
 
-6. Expose it over HTTPS:
+7. Expose it over HTTPS:
 
 ```bash
 cloudflared tunnel --url http://127.0.0.1:3721
@@ -79,6 +85,12 @@ The recommended deployment model is:
 - one env file per instance in `/etc/tg-canvas/%i.env`
 - one systemd instance name per bot, such as `main` or `bot2`
 - one per-instance state directory under `var/%i/`
+
+For additional instances, use:
+
+```bash
+tg-canvas add-instance
+```
 
 Template services:
 

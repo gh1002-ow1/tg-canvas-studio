@@ -573,13 +573,12 @@
         const data = await res.json();
         systemStats.cpu = typeof data.cpu === 'number' ? data.cpu : 0;
         systemStats.memory = typeof data.memory === 'number' ? data.memory : 0;
+        systemStats.disk = typeof data.disk === 'number' ? data.disk : 0;
       } else {
         systemStats.cpu = 0;
         systemStats.memory = 0;
+        systemStats.disk = 0;
       }
-      
-      // Disk - simple estimate
-      systemStats.disk = Math.floor(Math.random() * 20) + 50;
     } catch (err) {
       systemStats = { cpu: 0, memory: 0, disk: 0 };
     }

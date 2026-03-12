@@ -137,23 +137,75 @@ console.log(`[tg-canvas] COMMAND_EXECUTION_MODE=${COMMAND_EXECUTION_MODE}`);
 
 // ---- Helpers ----
 const MINIAPP_DIR = path.join(__dirname, "miniapp");
+const DEFAULT_COMMANDS_PATH = path.join(MINIAPP_DIR, "commands.json");
+
+function bundledCommandsConfig() {
+  try {
+    const bundled = fs.readFileSync(DEFAULT_COMMANDS_PATH, "utf8");
+    return JSON.parse(bundled || "{}");
+  } catch (_) {
+    return { commands: [] };
+  }
+}
+
+function sanitizeCommandsConfig(config) {
+  const workspaceRoot = path.resolve(process.env.WORKSPACE_ROOT || process.env.HOME || "/");
+  const bundled = bundledCommandsConfig();
+  const bundledById = new Map((bundled.commands || []).map((cmd) => [cmd.id, cmd]));
+  const input = Array.isArray(config?.commands) ? config.commands : [];
+  const out = [];
+  const seen = new Set();
+
+  for (const rawCmd of input) {
+    if (!rawCmd || !rawCmd.id || !rawCmd.type || !rawCmd.label) continue;
+    const cmd = { ...rawCmd };
+
+    if (cmd.type === "navigate") {
+      const rawPath = String(cmd.path || "").trim();
+      if (!rawPath) continue;
+      if (path.isAbsolute(rawPath)) {
+        const normalizedAbs = path.resolve(rawPath);
+        if (!normalizedAbs.startsWith(workspaceRoot)) continue;
+        const rel = path.relative(workspaceRoot, normalizedAbs);
+        cmd.path = rel || ".";
+      }
+    } else if (cmd.type === "terminal") {
+      const commandText = String(cmd.command || "").trim();
+      if (!commandText) continue;
+      if (/openclaw-gateway-(status|restart)\.sh/.test(commandText)) {
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    if (seen.has(cmd.id)) continue;
+    seen.add(cmd.id);
+    out.push(cmd);
+  }
+
+  for (const bundledCmd of bundled.commands || []) {
+    if (!seen.has(bundledCmd.id)) out.push(bundledCmd);
+  }
+
+  return { commands: out };
+}
+
+function normalizedProxyOrigin() {
+  return `http://${OPENCLAW_PROXY_HOST}:${OPENCLAW_PROXY_PORT}`;
+}
 
 function readCommandsConfig() {
   try {
     if (fs.existsSync(COMMANDS_FILE)) {
       const data = fs.readFileSync(COMMANDS_FILE, "utf8");
-      return JSON.parse(data || "{}");
+      return sanitizeCommandsConfig(JSON.parse(data || "{}"));
     }
   } catch (_) {
     // Fall back to bundled defaults.
   }
 
-  try {
-    const bundled = fs.readFileSync(path.join(MINIAPP_DIR, "commands.json"), "utf8");
-    return JSON.parse(bundled || "{}");
-  } catch (_) {
-    return { commands: [] };
-  }
+  return sanitizeCommandsConfig(bundledCommandsConfig());
 }
 
 function isLoopbackAddress(addr) {
@@ -392,6 +444,7 @@ function patchControlCsp(headersIn) {
 function proxyToOpenClaw(req, res, targetPath) {
   const headers = { ...req.headers };
   delete headers.host;
+  headers.origin = normalizedProxyOrigin();
   if (OPENCLAW_GATEWAY_TOKEN) {
     headers.authorization = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
   }
@@ -851,7 +904,20 @@ const server = http.createServer(async (req, res) => {
         if (totalKb > 0) memory = Math.max(0, Math.min(100, Math.round(((totalKb - availKb) / totalKb) * 100)));
       }
 
-      return sendJson(res, 200, { cpu, memory, disk: null });
+      let disk = 0;
+      try {
+        const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
+        const stat = fs.statfsSync(workspaceRoot);
+        const total = Number(stat.blocks || 0) * Number(stat.bsize || 0);
+        const free = Number(stat.bavail || 0) * Number(stat.bsize || 0);
+        if (total > 0) {
+          disk = Math.max(0, Math.min(100, Math.round(((total - free) / total) * 100)));
+        }
+      } catch (_) {
+        disk = 0;
+      }
+
+      return sendJson(res, 200, { cpu, memory, disk });
     }
 
     // Push endpoint — PUSH_TOKEN required (loopback check retained as an additional layer
@@ -1330,6 +1396,7 @@ server.on("upgrade", (req, socket, head) => {
 
     const targetPath = url.pathname.replace(/^\/oc/, "") + (url.search || "");
     const wsHeaders = { ...req.headers };
+    wsHeaders.origin = normalizedProxyOrigin();
     if (OPENCLAW_GATEWAY_TOKEN) wsHeaders.authorization = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
     const proxyReq = http.request({
       host: OPENCLAW_PROXY_HOST,
@@ -1382,6 +1449,7 @@ server.on("upgrade", (req, socket, head) => {
     }
 
     const wsHeaders = { ...req.headers };
+    wsHeaders.origin = normalizedProxyOrigin();
     if (OPENCLAW_GATEWAY_TOKEN) wsHeaders.authorization = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
     const proxyReq = http.request({
       host: OPENCLAW_PROXY_HOST,

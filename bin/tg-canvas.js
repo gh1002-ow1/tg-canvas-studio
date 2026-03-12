@@ -146,6 +146,27 @@ function generateSecret() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function commandExists(bin) {
+  const result = spawnSync("bash", ["-lc", `command -v ${bin} >/dev/null 2>&1`], {
+    stdio: "ignore",
+    cwd: cwd(),
+    env,
+  });
+  return result.status === 0;
+}
+
+function detectOpenClawProxyPort() {
+  const result = spawnSync("bash", ["-lc", "openclaw gateway status --deep 2>/dev/null || true"], {
+    stdio: ["ignore", "pipe", "ignore"],
+    encoding: "utf8",
+    cwd: cwd(),
+    env,
+  });
+  const text = String(result.stdout || "");
+  const match = text.match(/Listening:\s+127\.0\.0\.1:(\d+)/) || text.match(/port=(\d+)/);
+  return match ? match[1] : "18789";
+}
+
 async function isPortFree(port) {
   return await new Promise((resolve) => {
     const server = net.createServer();
@@ -278,7 +299,7 @@ async function setupInstance() {
     const serviceUser = parseFlag("--service-user") || defaultServiceUser();
     const serviceHome = userHome(serviceUser);
     const projectRoot = path.resolve(parseFlag("--project-root") || PROJECT_ROOT);
-    const defaultWorkspace = env.WORKSPACE_ROOT || cwd();
+    const defaultWorkspace = env.WORKSPACE_ROOT || projectRoot;
     const defaultWorkdir = env.TTYD_WORKDIR || defaultWorkspace;
     const exposureFlag = parseFlag("--exposure");
     const exposure = rl
@@ -320,7 +341,7 @@ async function setupInstance() {
         })
       : "";
     const OPENCLAW_PROXY_HOST = parseFlag("--openclaw-proxy-host") || "127.0.0.1";
-    const OPENCLAW_PROXY_PORT = parseFlag("--openclaw-proxy-port") || "18789";
+    const OPENCLAW_PROXY_PORT = parseFlag("--openclaw-proxy-port") || detectOpenClawProxyPort();
     const OPENCLAW_GATEWAY_TOKEN = enableOpenClawProxy
       ? await ask("OpenClaw gateway token (optional)", parseFlag("--openclaw-gateway-token") || "", {
           required: false,
@@ -356,6 +377,13 @@ async function setupInstance() {
 
     if (!force && fs.existsSync(config.envPath)) {
       throw new Error(`Instance already exists: ${config.instance} (${config.envPath})`);
+    }
+
+    if (autoStart && !commandExists("ttyd")) {
+      throw new Error("ttyd is not installed or not on PATH; install ttyd before enabling terminal access");
+    }
+    if (autoStart && exposure === "cloudflare" && !commandExists("cloudflared")) {
+      throw new Error("cloudflared is not installed or not on PATH");
     }
 
     runCommand("bash", [INSTALL_SCRIPT, "--user", serviceUser, "--root", projectRoot, "--quiet"], { cwd: projectRoot });

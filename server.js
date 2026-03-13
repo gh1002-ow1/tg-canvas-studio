@@ -226,7 +226,7 @@ function sanitizeCommandsConfig(config) {
         const rel = path.relative(workspaceRoot, normalizedAbs);
         cmd.path = rel || ".";
       }
-    } else if (cmd.type === "terminal") {
+    } else if (cmd.type === "terminal" || cmd.type === "exec") {
       const commandText = String(cmd.command || "").trim();
       if (!commandText) continue;
       if (/openclaw-gateway-(status|restart)\.sh/.test(commandText)) {

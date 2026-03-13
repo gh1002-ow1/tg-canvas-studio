@@ -101,6 +101,8 @@ function fixedCommandById(commandId, workspaceRoot) {
   const map = {
     "git-status": `cd ${JSON.stringify(root)} && git status`,
     "git-log": `cd ${JSON.stringify(root)} && git log --oneline -10`,
+    "ogs": "openclaw gateway status --deep",
+    "ogr": "openclaw gateway restart",
     "openclaw-status": "openclaw models status",
     "server-logs": `tail -50 ${JSON.stringify(path.join(projectLogs, `tg-canvas-${INSTANCE_NAME}.log`))}`,
     "check-services": "systemctl --no-pager --type=service --state=running | rg -n \"(tg-canvas|ttyd-canvas|cloudflared-canvas)\" || true",
@@ -113,7 +115,11 @@ function fixedCommandByAlias(commandText, workspaceRoot) {
   const projectLogs = LOG_DIR;
   const normalized = String(commandText || "").trim().toLowerCase().replace(/\s+/g, " ");
   const map = {
+    "ogs": "openclaw gateway status --deep",
+    "ogr": "openclaw gateway restart",
     "openclaw gateway status": "openclaw gateway status",
+    "openclaw gateway status --deep": "openclaw gateway status --deep",
+    "openclaw gateway restart": "openclaw gateway restart",
     "openclaw models status": "openclaw models status",
     "git status": `cd ${JSON.stringify(root)} && git status`,
     "git log --oneline -10": `cd ${JSON.stringify(root)} && git log --oneline -10`,
@@ -450,9 +456,19 @@ function getJwtFromRequest(req, urlObj) {
 function patchControlCsp(headersIn) {
   const headers = { ...headersIn };
   const cspKey = Object.keys(headers).find((k) => k.toLowerCase() === 'content-security-policy');
+  const xfoKey = Object.keys(headers).find((k) => k.toLowerCase() === 'x-frame-options');
+  if (xfoKey) delete headers[xfoKey];
   if (!cspKey) return headers;
 
   let csp = String(headers[cspKey] || '');
+  if (/frame-ancestors\s+[^;]+/.test(csp)) {
+    csp = csp.replace(
+      /frame-ancestors\s+[^;]+/,
+      "frame-ancestors 'self' https://web.telegram.org https://webk.telegram.org https://webz.telegram.org https://t.me https://telegram.me https://*.telegram.org"
+    );
+  } else {
+    csp += "; frame-ancestors 'self' https://web.telegram.org https://webk.telegram.org https://webz.telegram.org https://t.me https://telegram.me https://*.telegram.org";
+  }
   // Allow Google Fonts used by control-ui styles without broadly opening script sources.
   if (/style-src\s/.test(csp) && !/fonts\.googleapis\.com/.test(csp)) {
     csp = csp.replace(/style-src\s+([^;]+)/, (m, p1) => `style-src ${p1} https://fonts.googleapis.com`);

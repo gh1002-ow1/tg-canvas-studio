@@ -71,6 +71,7 @@
   let currentPath = '.';
   let editorInstance = null;
   let currentEditorFile = null;
+  let fileRootPath = '.';
 
   // Find in file state
   let findMatches = [];
@@ -194,8 +195,23 @@
   }
 
   // ---------- File Browser Functions ----------
-  async function loadDirectory(path) {
-    currentPath = path || '.';
+  function normalizeFilePath(inputPath) {
+    const raw = String(inputPath || '.').trim();
+    if (!raw || raw === '/' || raw === '.') return '.';
+    const parts = [];
+    for (const part of raw.split('/')) {
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        if (parts.length) parts.pop();
+        continue;
+      }
+      parts.push(part);
+    }
+    return parts.join('/') || '.';
+  }
+
+  async function loadDirectory(path, { allowFallback = true } = {}) {
+    currentPath = normalizeFilePath(path);
     const pathEl = document.getElementById('currentPath');
     if (pathEl) pathEl.textContent = currentPath === '.' ? '/' : currentPath;
 
@@ -204,8 +220,12 @@
 
     try {
       const res = await fetch(`/fs/tree?path=${encodeURIComponent(currentPath)}&token=${encodeURIComponent(jwt)}`);
-      if (!res.ok) throw new Error('Failed to load');
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}));
+        throw new Error(errorBody.error || 'Failed to load');
+      }
       const data = await res.json();
+      fileRootPath = '.';
 
       treeEl.innerHTML = '';
       
@@ -242,7 +262,10 @@
         treeEl.appendChild(el);
       });
     } catch (err) {
-      treeEl.innerHTML = `<div class="files-empty">Error: ${err.message}</div>`;
+      if (allowFallback && currentPath !== fileRootPath) {
+        return loadDirectory(fileRootPath, { allowFallback: false });
+      }
+      treeEl.innerHTML = '<div class="files-empty">No files available in workspace root</div>';
     }
   }
 
@@ -398,8 +421,7 @@
       showFileBrowser();
       loadDirectory(cmd.path);
     } else if (cmd.type === 'terminal') {
-      // Execute server-side and display output in-app (more reliable than terminal timing)
-      runQuickCommand(cmd);
+      openTerminalAndRun(cmd.command || '');
     }
   }
 
@@ -441,8 +463,6 @@
 
   function openTerminalAndRun(command) {
     console.log('[Canvas] Opening terminal with command:', command);
-    
-    // Open terminal pane
     document.getElementById('terminal-pane').style.display = 'flex';
     connectTerminal();
   }
@@ -522,7 +542,7 @@
 
   function showFileBrowser() {
     document.getElementById('files-pane').style.display = 'flex';
-    loadDirectory('.');
+    loadDirectory(currentPath || '.');
   }
 
   function closeFileBrowser() {

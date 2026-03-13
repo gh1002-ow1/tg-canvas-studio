@@ -10,7 +10,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
-const { exec } = require("child_process");
+const { exec, execSync } = require("child_process");
 const { WebSocketServer } = require("ws");
 
 // ---- Config ----
@@ -77,6 +77,22 @@ const COMMAND_RUN_ALLOWLIST = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
+
+function resolveAppVersion() {
+  const fromEnv = String(process.env.TG_CANVAS_VERSION || "").trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      cwd: PROJECT_ROOT,
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+    }).trim();
+  } catch (_) {
+    return "dev";
+  }
+}
+
+const APP_VERSION = resolveAppVersion();
 
 function resolveWorkspaceRoot() {
   const configured = String(process.env.WORKSPACE_ROOT || "").trim();
@@ -158,6 +174,7 @@ if (ENABLE_OPENCLAW_PROXY) {
 console.log(`[tg-canvas] INSTANCE_NAME=${INSTANCE_NAME}`);
 console.log(`[tg-canvas] DATA_DIR=${DATA_DIR}`);
 console.log(`[tg-canvas] WORKSPACE_ROOT: ${WORKSPACE_ROOT}`);
+console.log(`[tg-canvas] APP_VERSION=${APP_VERSION}`);
 if (COMMAND_RUN_ALLOW_ALL) {
   console.log("[tg-canvas] COMMAND_RUN_ALLOWLIST=* (all terminal commands allowed)");
 } else {
@@ -247,6 +264,7 @@ function sendJson(res, statusCode, obj) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json",
     "Content-Length": Buffer.byteLength(body),
+    "X-TG-Canvas-Version": APP_VERSION,
   });
   res.end(body);
 }
@@ -416,6 +434,7 @@ function serveFile(res, filePath) {
       "Cache-Control": "no-cache, no-store, must-revalidate",
       "Pragma": "no-cache",
       "Expires": "0",
+      "X-TG-Canvas-Version": APP_VERSION,
     };
 
     // Telegram WebApp is embedded; allow Telegram origins to frame this app.
@@ -917,6 +936,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/health") {
       return sendJson(res, 200, {
         ok: true,
+        version: APP_VERSION,
         uptime: process.uptime(),
         clients: wsClients.size,
         hasState: !!currentState,

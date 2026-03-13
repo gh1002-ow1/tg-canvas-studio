@@ -126,7 +126,7 @@
       let html = `<div class="search-results-header">Found ${data.count} result${data.count !== 1 ? 's' : ''} for "${escapeHtml(query)}"</div>`;
       
       data.results.forEach(item => {
-        const icon = getFileIcon(item.name);
+        const icon = item.type === 'dir' ? '📁' : getFileIcon(item.name);
         html += `
           <div class="search-result-item" data-path="${escapeHtml(item.path)}">
             <div class="search-result-header">
@@ -135,7 +135,7 @@
                 <div class="search-result-name">${escapeHtml(item.name)}</div>
                 <div class="search-result-path">${escapeHtml(item.path)}</div>
               </div>
-              <span class="search-match-badge">${item.matchType}</span>
+              <span class="search-match-badge">${item.type === 'dir' ? 'dir' : item.matchType}</span>
             </div>
         `;
 
@@ -163,6 +163,12 @@
       searchResults.querySelectorAll('.search-result-item').forEach(item => {
         item.onclick = () => {
           const path = item.dataset.path;
+          const result = data.results.find((entry) => entry.path === path);
+          if (result?.type === 'dir') {
+            clearSearch();
+            loadDirectory(path);
+            return;
+          }
           openFile(path);
         };
       });
@@ -213,6 +219,14 @@
     return parts.join('/') || '.';
   }
 
+  function getParentFilePath(inputPath) {
+    const normalized = normalizeFilePath(inputPath);
+    if (normalized === '.' || normalized === '/') return null;
+    const parts = normalized.split('/').filter(Boolean);
+    parts.pop();
+    return parts.length ? `/${parts.join('/')}` : '/';
+  }
+
   async function loadDirectory(path, { allowFallback = true } = {}) {
     currentPath = normalizeFilePath(path);
     const pathEl = document.getElementById('currentPath');
@@ -231,7 +245,9 @@
       fileRootPath = normalizeFilePath(data.workspaceRoot || fileRootPath || '.');
       currentPath = normalizeFilePath(data.path || currentPath);
       if (pathEl) pathEl.textContent = currentPath;
-      const parentPath = data.parentPath ? normalizeFilePath(data.parentPath) : null;
+      const parentPath = data.parentPath
+        ? normalizeFilePath(data.parentPath)
+        : getParentFilePath(currentPath);
 
       treeEl.innerHTML = '';
       

@@ -1320,6 +1320,16 @@ const server = http.createServer(async (req, res) => {
             const relPath = path.join(relDirPath, entry.name).replace(/^\.\//, "");
 
             if (entry.isDirectory()) {
+              if ((searchType === "name" || searchType === "all") && entry.name.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                  name: entry.name,
+                  path: relPath,
+                  type: "dir",
+                  matchType: "name",
+                  matchLines: null,
+                });
+                if (results.length >= maxResults) break;
+              }
               searchDirectory(absPath, relPath);
             } else if (entry.isFile()) {
               let match = false;

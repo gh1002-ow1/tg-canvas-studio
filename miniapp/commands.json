@@ -9,22 +9,6 @@
       "path": "."
     },
     {
-      "id": "git-status",
-      "type": "exec",
-      "label": "Git 状态",
-      "icon": "🔍",
-      "description": "查看当前目录 Git 状态",
-      "command": "git status"
-    },
-    {
-      "id": "git-log",
-      "type": "exec",
-      "label": "Git 日志",
-      "icon": "📝",
-      "description": "查看最近的提交",
-      "command": "git log --oneline -10"
-    },
-    {
       "id": "ogs",
       "type": "exec",
       "label": "OGS",

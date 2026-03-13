@@ -333,7 +333,7 @@ function formatEnv(config) {
     "# --- Quick Commands ---",
     "ALLOW_COMMANDS_WRITE=true",
     "COMMAND_EXECUTION_MODE=editable",
-    "COMMAND_RUN_ALLOWLIST=git-status,git-log,ogs,ogr,openclaw-status,server-logs,check-services",
+    "COMMAND_RUN_ALLOWLIST=ogs,ogr,openclaw-status,server-logs,check-services",
     "",
     "# --- ttyd ---",
     `TTYD_PORT=${config.TTYD_PORT}`,

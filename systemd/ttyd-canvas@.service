@@ -11,7 +11,7 @@ WorkingDirectory=/home/joker/projects/tg-canvas-studio
 Environment=TG_CANVAS_INSTANCE=%i
 EnvironmentFile=/etc/tg-canvas/%i.env
 ExecStartPre=/usr/bin/mkdir -p /home/joker/projects/tg-canvas-studio/logs
-ExecStart=/bin/bash -lc 'cd ${TTYD_WORKDIR:-/home/joker/projects} && /usr/bin/ttyd -i 127.0.0.1 -p ${TTYD_PORT:-7681} -W -b /ttyd /bin/bash -li'
+ExecStart=/bin/bash -lc 'START_DIR="${TTYD_WORKDIR:-${WORKSPACE_ROOT:-/}}"; if [ ! -d "$START_DIR" ]; then START_DIR="${WORKSPACE_ROOT:-/}"; fi; if [ ! -d "$START_DIR" ]; then START_DIR=/; fi; cd "$START_DIR" && exec /usr/bin/ttyd -i 127.0.0.1 -p ${TTYD_PORT:-7681} -W -b /ttyd /bin/bash -li'
 Restart=always
 RestartSec=5s
 StandardOutput=append:/home/joker/projects/tg-canvas-studio/logs/ttyd-canvas-%i.log

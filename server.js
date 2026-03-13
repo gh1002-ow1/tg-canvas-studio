@@ -1049,22 +1049,59 @@ const server = http.createServer(async (req, res) => {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    // Helper to validate and resolve path within workspace
-    function resolveWorkspacePath(relPath) {
-      const normalized = path.normalize(relPath || ".");
-      const resolved = path.resolve(WORKSPACE_ROOT, normalized);
-      if (!resolved.startsWith(WORKSPACE_ROOT)) {
-        return null; // Path traversal attempt
+    const FS_DELETE_DENY_ABSOLUTE_PATHS = [
+      "/",
+      "/bin",
+      "/boot",
+      "/dev",
+      "/etc",
+      "/lib",
+      "/lib64",
+      "/proc",
+      "/root",
+      "/run",
+      "/sbin",
+      "/sys",
+      "/usr",
+    ].map((p) => path.resolve(p));
+
+    function resolveFsPath(inputPath) {
+      const rawPath = String(inputPath || ".").trim();
+      if (!rawPath || rawPath === ".") {
+        return {
+          requested: ".",
+          resolved: WORKSPACE_ROOT,
+          displayPath: WORKSPACE_ROOT,
+          withinWorkspace: true,
+        };
       }
-      return resolved;
+
+      const resolved = path.isAbsolute(rawPath)
+        ? path.resolve(rawPath)
+        : path.resolve(WORKSPACE_ROOT, rawPath);
+      const relativeToWorkspace = path.relative(WORKSPACE_ROOT, resolved);
+      const withinWorkspace = relativeToWorkspace === "" || (!relativeToWorkspace.startsWith("..") && !path.isAbsolute(relativeToWorkspace));
+
+      return {
+        requested: rawPath,
+        resolved,
+        displayPath: resolved,
+        withinWorkspace,
+        relativeToWorkspace: withinWorkspace ? (relativeToWorkspace || ".") : null,
+      };
     }
 
-    function isProtectedDeletePath(relPath, resolved) {
-      const normalizedRel = path.normalize(relPath || ".");
-      const rootResolved = path.resolve(WORKSPACE_ROOT);
-      if (resolved === rootResolved || normalizedRel === "." || normalizedRel === "") {
+    function isProtectedDeletePath(fsPath) {
+      const resolved = fsPath.resolved;
+      if (resolved === WORKSPACE_ROOT) {
         return true;
       }
+      if (FS_DELETE_DENY_ABSOLUTE_PATHS.some((protectedPath) => resolved === protectedPath || resolved.startsWith(`${protectedPath}${path.sep}`))) {
+        return true;
+      }
+      if (!fsPath.withinWorkspace) return false;
+
+      const normalizedRel = fsPath.relativeToWorkspace || ".";
       return FS_DELETE_DENY_PREFIXES.some((prefix) => {
         const p = prefix.replace(/^\.?\//, "");
         return normalizedRel === p || normalizedRel.startsWith(`${p}/`);
@@ -1077,12 +1114,10 @@ const server = http.createServer(async (req, res) => {
       const payload = verifyJwt(token);
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
-      const relPath = url.searchParams.get("path") || ".";
-      const resolved = resolveWorkspacePath(relPath);
-      if (!resolved) return sendJson(res, 403, { error: "Path not allowed" });
+      const fsPath = resolveFsPath(url.searchParams.get("path") || ".");
 
       try {
-        const entries = fs.readdirSync(resolved, { withFileTypes: true });
+        const entries = fs.readdirSync(fsPath.resolved, { withFileTypes: true });
         const items = entries
           .filter(e => e.name !== '.' && e.name !== '..')
           .sort((a, b) => {
@@ -1093,12 +1128,14 @@ const server = http.createServer(async (req, res) => {
           .map(e => ({
             name: e.name,
             type: e.isDirectory() ? 'dir' : 'file',
-            path: path.join(relPath, e.name).replace(/^\.\//, ''),
+            path: path.join(fsPath.resolved, e.name),
           }));
 
         return sendJson(res, 200, {
-          path: relPath,
-          absolute: resolved,
+          path: fsPath.displayPath,
+          absolute: fsPath.resolved,
+          workspaceRoot: WORKSPACE_ROOT,
+          withinWorkspace: fsPath.withinWorkspace,
           items,
         });
       } catch (err) {
@@ -1112,22 +1149,21 @@ const server = http.createServer(async (req, res) => {
       const payload = verifyJwt(token);
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
-      const relPath = url.searchParams.get("path");
-      if (!relPath) return sendJson(res, 400, { error: "Missing path" });
+      const requestedPath = url.searchParams.get("path");
+      if (!requestedPath) return sendJson(res, 400, { error: "Missing path" });
 
-      const resolved = resolveWorkspacePath(relPath);
-      if (!resolved) return sendJson(res, 403, { error: "Path not allowed" });
+      const fsPath = resolveFsPath(requestedPath);
 
       try {
-        const stats = fs.statSync(resolved);
+        const stats = fs.statSync(fsPath.resolved);
         if (stats.isDirectory()) {
           return sendJson(res, 400, { error: "Cannot read directory" });
         }
         if (stats.size > 1024 * 1024) {
           return sendJson(res, 413, { error: "File too large (max 1MB)" });
         }
-        const content = fs.readFileSync(resolved, "utf8");
-        return sendJson(res, 200, { path: relPath, content, size: stats.size });
+        const content = fs.readFileSync(fsPath.resolved, "utf8");
+        return sendJson(res, 200, { path: fsPath.displayPath, content, size: stats.size });
       } catch (err) {
         if (err.code === 'ENOENT') return sendJson(res, 404, { error: "File not found" });
         return sendJson(res, 500, { error: err.message });
@@ -1140,16 +1176,15 @@ const server = http.createServer(async (req, res) => {
       const payload = verifyJwt(token);
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
-      const relPath = url.searchParams.get("path");
-      if (!relPath) return sendJson(res, 400, { error: "Missing path" });
+      const requestedPath = url.searchParams.get("path");
+      if (!requestedPath) return sendJson(res, 400, { error: "Missing path" });
 
-      const resolved = resolveWorkspacePath(relPath);
-      if (!resolved) return sendJson(res, 403, { error: "Path not allowed" });
+      const fsPath = resolveFsPath(requestedPath);
 
       try {
-        const stats = fs.statSync(resolved);
+        const stats = fs.statSync(fsPath.resolved);
         return sendJson(res, 200, {
-          path: relPath,
+          path: fsPath.displayPath,
           size: stats.size,
           mtime: stats.mtime.toISOString(),
           ctime: stats.ctime.toISOString(),
@@ -1169,23 +1204,22 @@ const server = http.createServer(async (req, res) => {
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
       const body = await readBodyJson(req);
-      const relPath = body.path;
+      const requestedPath = body.path;
       const content = body.content;
 
-      if (!relPath) return sendJson(res, 400, { error: "Missing path" });
+      if (!requestedPath) return sendJson(res, 400, { error: "Missing path" });
       if (typeof content !== 'string') return sendJson(res, 400, { error: "Missing content" });
       if (content.length > 1024 * 1024) return sendJson(res, 413, { error: "Content too large" });
 
-      const resolved = resolveWorkspacePath(relPath);
-      if (!resolved) return sendJson(res, 403, { error: "Path not allowed" });
+      const fsPath = resolveFsPath(requestedPath);
 
       try {
         // Ensure parent directory exists
-        const parentDir = path.dirname(resolved);
+        const parentDir = path.dirname(fsPath.resolved);
         fs.mkdirSync(parentDir, { recursive: true });
 
-        fs.writeFileSync(resolved, content, "utf8");
-        return sendJson(res, 200, { ok: true, path: relPath, size: content.length });
+        fs.writeFileSync(fsPath.resolved, content, "utf8");
+        return sendJson(res, 200, { ok: true, path: fsPath.displayPath, size: content.length });
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }
@@ -1198,16 +1232,15 @@ const server = http.createServer(async (req, res) => {
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
       const body = await readBodyJson(req);
-      const relPath = body.path;
+      const requestedPath = body.path;
 
-      if (!relPath) return sendJson(res, 400, { error: "Missing path" });
+      if (!requestedPath) return sendJson(res, 400, { error: "Missing path" });
 
-      const resolved = resolveWorkspacePath(relPath);
-      if (!resolved) return sendJson(res, 403, { error: "Path not allowed" });
+      const fsPath = resolveFsPath(requestedPath);
 
       try {
-        fs.mkdirSync(resolved, { recursive: true });
-        return sendJson(res, 200, { ok: true, path: relPath });
+        fs.mkdirSync(fsPath.resolved, { recursive: true });
+        return sendJson(res, 200, { ok: true, path: fsPath.displayPath });
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }
@@ -1220,24 +1253,23 @@ const server = http.createServer(async (req, res) => {
       if (!payload) return sendJson(res, 401, { error: "Invalid token" });
 
       const body = await readBodyJson(req);
-      const relPath = body.path;
+      const requestedPath = body.path;
 
-      if (!relPath) return sendJson(res, 400, { error: "Missing path" });
+      if (!requestedPath) return sendJson(res, 400, { error: "Missing path" });
 
-      const resolved = resolveWorkspacePath(relPath);
-      if (!resolved) return sendJson(res, 403, { error: "Path not allowed" });
-      if (isProtectedDeletePath(relPath, resolved)) {
+      const fsPath = resolveFsPath(requestedPath);
+      if (isProtectedDeletePath(fsPath)) {
         return sendJson(res, 403, { error: "Protected path cannot be deleted" });
       }
 
       try {
-        const stats = fs.statSync(resolved);
+        const stats = fs.statSync(fsPath.resolved);
         if (stats.isDirectory()) {
-          fs.rmSync(resolved, { recursive: true });
+          fs.rmSync(fsPath.resolved, { recursive: true });
         } else {
-          fs.unlinkSync(resolved);
+          fs.unlinkSync(fsPath.resolved);
         }
-        return sendJson(res, 200, { ok: true, path: relPath });
+        return sendJson(res, 200, { ok: true, path: fsPath.displayPath });
       } catch (err) {
         if (err.code === 'ENOENT') return sendJson(res, 404, { error: "Not found" });
         return sendJson(res, 500, { error: err.message });

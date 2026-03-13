@@ -194,23 +194,29 @@
   // ---------- File Browser Functions ----------
   function normalizeFilePath(inputPath) {
     const raw = String(inputPath || '.').trim();
-    if (!raw || raw === '/' || raw === '.') return '.';
+    if (!raw || raw === '.') return '.';
+    const isAbsolute = raw.startsWith('/');
     const parts = [];
     for (const part of raw.split('/')) {
       if (!part || part === '.') continue;
       if (part === '..') {
-        if (parts.length) parts.pop();
+        if (parts.length) {
+          parts.pop();
+        } else if (!isAbsolute) {
+          parts.push('..');
+        }
         continue;
       }
       parts.push(part);
     }
+    if (isAbsolute) return `/${parts.join('/')}` || '/';
     return parts.join('/') || '.';
   }
 
   async function loadDirectory(path, { allowFallback = true } = {}) {
     currentPath = normalizeFilePath(path);
     const pathEl = document.getElementById('currentPath');
-    if (pathEl) pathEl.textContent = currentPath === '.' ? '/' : currentPath;
+    if (pathEl) pathEl.textContent = currentPath;
 
     const treeEl = document.getElementById('file-tree');
     treeEl.innerHTML = '<div class="files-loading"><div class="spinner"></div>Loading...</div>';
@@ -222,7 +228,9 @@
         throw new Error(errorBody.error || 'Failed to load');
       }
       const data = await res.json();
-      fileRootPath = '.';
+      fileRootPath = normalizeFilePath(data.workspaceRoot || fileRootPath || '.');
+      currentPath = normalizeFilePath(data.path || currentPath);
+      if (pathEl) pathEl.textContent = currentPath;
 
       treeEl.innerHTML = '';
       
@@ -232,9 +240,7 @@
         upItem.className = 'file-item dir';
         upItem.innerHTML = '<span class="file-item-icon">📁</span><span class="file-item-name">..</span>';
         upItem.onclick = () => {
-          const parts = currentPath.split('/');
-          parts.pop();
-          loadDirectory(parts.join('/') || '.');
+          loadDirectory(normalizeFilePath(`${currentPath}/..`));
         };
         treeEl.appendChild(upItem);
       }
@@ -262,7 +268,7 @@
       if (allowFallback && currentPath !== fileRootPath) {
         return loadDirectory(fileRootPath, { allowFallback: false });
       }
-      treeEl.innerHTML = '<div class="files-empty">No files available in workspace root</div>';
+      treeEl.innerHTML = `<div class="files-empty">${escapeHtml(err.message || 'No files available')}</div>`;
     }
   }
 
@@ -555,7 +561,8 @@
 
   async function loadRecentFiles() {
     try {
-      const res = await fetch('/fs/tree?path=.&token=' + encodeURIComponent(jwt));
+      const rootPath = normalizeFilePath(fileRootPath || '.');
+      const res = await fetch('/fs/tree?path=' + encodeURIComponent(rootPath) + '&token=' + encodeURIComponent(jwt));
       if (!res.ok) return [];
       const data = await res.json();
       const files = (data.items || []).filter(i => i.type === 'file').slice(0, 8);
@@ -834,7 +841,7 @@
   async function resetCommands() {
     if (confirm('Reset to default commands? This will discard your changes.')) {
       const defaultCommands = [
-        { id: 'open-workspace', type: 'navigate', label: 'Workspace', icon: '💼', description: '打开工作区根目录', path: '.' },
+        { id: 'open-workspace', type: 'navigate', label: 'Workspace', icon: '💼', description: '打开工作区根目录', path: fileRootPath || '.' },
         { id: 'ogs', type: 'exec', label: 'OGS', icon: '🤖', description: '查看 OpenClaw Gateway 状态', command: 'bash "$TG_CANVAS_ROOT/scripts/openclaw-gateway-status.sh" --deep' },
         { id: 'ogr', type: 'exec', label: 'OGR', icon: '🔁', description: '重启 OpenClaw Gateway', command: 'bash "$TG_CANVAS_ROOT/scripts/openclaw-gateway-restart.sh"' },
         { id: 'server-logs', type: 'exec', label: '服务日志', icon: '📋', description: '查看 TG Canvas 服务最近日志', command: 'journalctl -u tg-canvas@main.service -n 50 --no-pager || journalctl -u tg-canvas.service -n 50 --no-pager' },

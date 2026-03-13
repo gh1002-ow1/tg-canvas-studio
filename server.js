@@ -78,6 +78,23 @@ const COMMAND_RUN_ALLOWLIST = new Set(
     .filter(Boolean)
 );
 
+function resolveWorkspaceRoot() {
+  const configured = String(process.env.WORKSPACE_ROOT || "").trim();
+  const candidates = [configured, PROJECT_ROOT].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const resolved = path.resolve(candidate);
+      const stats = fs.statSync(resolved);
+      if (stats.isDirectory()) return resolved;
+    } catch (_) {
+      // Try next candidate.
+    }
+  }
+  return PROJECT_ROOT;
+}
+
+const WORKSPACE_ROOT = resolveWorkspaceRoot();
+
 function fixedCommandById(commandId, workspaceRoot) {
   const root = workspaceRoot || process.env.HOME || "/";
   const projectLogs = LOG_DIR;
@@ -127,7 +144,7 @@ if (ENABLE_OPENCLAW_PROXY) {
 }
 console.log(`[tg-canvas] INSTANCE_NAME=${INSTANCE_NAME}`);
 console.log(`[tg-canvas] DATA_DIR=${DATA_DIR}`);
-console.log(`[tg-canvas] WORKSPACE_ROOT: ${process.env.WORKSPACE_ROOT || 'not set'}`);
+console.log(`[tg-canvas] WORKSPACE_ROOT: ${WORKSPACE_ROOT}`);
 if (COMMAND_RUN_ALLOW_ALL) {
   console.log("[tg-canvas] COMMAND_RUN_ALLOWLIST=* (all terminal commands allowed)");
 } else {
@@ -149,7 +166,7 @@ function bundledCommandsConfig() {
 }
 
 function sanitizeCommandsConfig(config) {
-  const workspaceRoot = path.resolve(process.env.WORKSPACE_ROOT || process.env.HOME || "/");
+  const workspaceRoot = WORKSPACE_ROOT;
   const bundled = bundledCommandsConfig();
   const bundledById = new Map((bundled.commands || []).map((cmd) => [cmd.id, cmd]));
   const input = Array.isArray(config?.commands) ? config.commands : [];
@@ -417,7 +434,17 @@ function getJwtFromRequest(req, urlObj) {
   const queryToken = urlObj.searchParams.get("token") || "";
   const cookies = parseCookies(req);
   const cookieToken = cookies.oc_jwt || cookies.ttyd_jwt || "";
-  return bearer || queryToken || cookieToken;
+  const referer = String(req.headers.referer || "");
+  let refererToken = "";
+  if (referer) {
+    try {
+      const refererUrl = new URL(referer);
+      refererToken = refererUrl.searchParams.get("token") || "";
+    } catch (_) {
+      refererToken = "";
+    }
+  }
+  return bearer || queryToken || cookieToken || refererToken;
 }
 
 function patchControlCsp(headersIn) {
@@ -441,7 +468,7 @@ function patchControlCsp(headersIn) {
   return headers;
 }
 
-function proxyToOpenClaw(req, res, targetPath) {
+function proxyToOpenClaw(req, res, targetPath, extraResponseHeaders = {}) {
   const headers = { ...req.headers };
   delete headers.host;
   headers.origin = normalizedProxyOrigin();
@@ -461,7 +488,7 @@ function proxyToOpenClaw(req, res, targetPath) {
       const isConfig = targetPath.startsWith('/__openclaw/control-ui-config.json');
       if (!isConfig) {
         const patchedHeaders = patchControlCsp(proxyRes.headers);
-        res.writeHead(proxyRes.statusCode || 502, patchedHeaders);
+        res.writeHead(proxyRes.statusCode || 502, { ...patchedHeaders, ...extraResponseHeaders });
         proxyRes.pipe(res);
         return;
       }
@@ -476,10 +503,14 @@ function proxyToOpenClaw(req, res, targetPath) {
           const scheme = /localhost|127\.0\.0\.1/.test(host) ? 'ws' : 'wss';
           j.gatewayUrl = `${scheme}://${host}`;
           const out = JSON.stringify(j);
-          res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(out) });
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(out),
+            ...extraResponseHeaders,
+          });
           res.end(out);
         } catch {
-          res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+          res.writeHead(proxyRes.statusCode || 502, { ...proxyRes.headers, ...extraResponseHeaders });
           res.end(buf);
         }
       });
@@ -494,7 +525,7 @@ function proxyToOpenClaw(req, res, targetPath) {
   req.pipe(proxyReq);
 }
 
-function proxyToTtyd(req, res, targetPath) {
+function proxyToTtyd(req, res, targetPath, extraResponseHeaders = {}) {
   const headers = { ...req.headers };
   delete headers.host;
   const proxyReq = http.request(
@@ -506,7 +537,7 @@ function proxyToTtyd(req, res, targetPath) {
       headers,
     },
     (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+      res.writeHead(proxyRes.statusCode || 502, { ...proxyRes.headers, ...extraResponseHeaders });
       proxyRes.pipe(res);
     }
   );
@@ -579,16 +610,16 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 429, { error: "Rate limit" });
       }
 
-      // Bootstrap cookie session from one-time token in URL.
       const queryToken = url.searchParams.get("token") || "";
       if (queryToken) {
         const qp = verifyJwt(queryToken);
         if (!qp) return sendJson(res, 401, { error: "Invalid token" });
-        res.writeHead(302, {
+        url.searchParams.delete("token");
+        const qs = url.searchParams.toString();
+        const targetPath = url.pathname.replace(/^\/oc/, "") + (qs ? `?${qs}` : "");
+        return proxyToOpenClaw(req, res, targetPath, {
           "Set-Cookie": `oc_jwt=${encodeURIComponent(queryToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${JWT_TTL_SECONDS}`,
-          "Location": "/oc/",
         });
-        return res.end();
       }
 
       const token = getJwtFromRequest(req, url);
@@ -634,12 +665,12 @@ const server = http.createServer(async (req, res) => {
       if (queryToken) {
         const qp = verifyJwt(queryToken);
         if (!qp) return sendJson(res, 401, { error: "Invalid token" });
-        const clean = url.pathname === "/ttyd" ? "/ttyd/" : url.pathname;
-        res.writeHead(302, {
+        url.searchParams.delete("token");
+        const qs = url.searchParams.toString();
+        const targetPath = url.pathname + (qs ? `?${qs}` : "");
+        return proxyToTtyd(req, res, targetPath, {
           "Set-Cookie": `ttyd_jwt=${encodeURIComponent(queryToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${JWT_TTL_SECONDS}`,
-          "Location": clean,
         });
-        return res.end();
       }
 
       const token = getJwtFromRequest(req, url);
@@ -693,7 +724,7 @@ const server = http.createServer(async (req, res) => {
         if (cmd.type !== "terminal") {
           return sendJson(res, 400, { error: "Command is not executable" });
         }
-        const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
+        const workspaceRoot = WORKSPACE_ROOT;
         let execCommand = "";
         if (COMMAND_EXECUTION_MODE === "safe") {
           const fixedById = fixedCommandById(commandId, workspaceRoot);
@@ -906,7 +937,7 @@ const server = http.createServer(async (req, res) => {
 
       let disk = 0;
       try {
-        const workspaceRoot = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
+        const workspaceRoot = WORKSPACE_ROOT;
         const stat = fs.statfsSync(workspaceRoot);
         const total = Number(stat.blocks || 0) * Number(stat.bsize || 0);
         const free = Number(stat.bavail || 0) * Number(stat.bsize || 0);
@@ -989,7 +1020,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---- File System API ----
-    const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.env.HOME || "/";
     const FS_DELETE_DENY_PREFIXES = (process.env.FS_DELETE_DENY_PREFIXES ||
       ".git,agents,identity,credentials,telegram,services")
       .split(",")

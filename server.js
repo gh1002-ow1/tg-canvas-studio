@@ -1303,6 +1303,7 @@ const server = http.createServer(async (req, res) => {
 
       function matchesExt(filename) {
         if (!extensions) return true;
+        if (!filename.includes(".")) return false;
         const ext = filename.split(".").pop().toLowerCase();
         return extensions.includes(ext);
       }
@@ -1337,7 +1338,7 @@ const server = http.createServer(async (req, res) => {
 
               // Name search
               if (searchType === "name" || searchType === "all") {
-                if (entry.name.toLowerCase().includes(query.toLowerCase())) {
+                if (matchesExt(entry.name) && entry.name.toLowerCase().includes(query.toLowerCase())) {
                   match = true;
                   console.log('[tg-canvas] Name match:', entry.name);
                 }

@@ -243,11 +243,9 @@
       }
       const data = await res.json();
       fileRootPath = normalizeFilePath(data.workspaceRoot || fileRootPath || '.');
-      currentPath = normalizeFilePath(data.path || currentPath);
+      currentPath = normalizeFilePath(data.absolute || data.path || currentPath);
       if (pathEl) pathEl.textContent = currentPath;
-      const parentPath = data.parentPath
-        ? normalizeFilePath(data.parentPath)
-        : getParentFilePath(currentPath);
+      const parentPath = getParentFilePath(currentPath);
 
       treeEl.innerHTML = '';
       

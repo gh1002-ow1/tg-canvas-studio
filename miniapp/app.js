@@ -22,7 +22,6 @@
   let connDot = null;
   let connText = null;
   let lastUpdatedEl = null;
-  let openControlBtn = null;
   let openTerminalBtn = null;
   let closeTerminalBtn = null;
   let openFilesBtn = null;
@@ -36,7 +35,6 @@
     connDot = document.getElementById('connDot');
     connText = document.getElementById('connText');
     lastUpdatedEl = document.getElementById('lastUpdated');
-    openControlBtn = document.getElementById('openControlBtn');
     openTerminalBtn = document.getElementById('openTerminalBtn');
     closeTerminalBtn = document.getElementById('closeTerminalBtn');
     openFilesBtn = document.getElementById('openFilesBtn');
@@ -65,7 +63,6 @@
   let reconnectTimer = null;
   let lastUpdatedTs = null;
   let relativeTimer = null;
-  let openingControl = false;
 
   // ---------- File Browser State ----------
   let currentPath = '.';
@@ -998,22 +995,6 @@
     }
   }
 
-  function setControlButtonLoading(isLoading) {
-    if (!openControlBtn) return;
-    if (isLoading) {
-      openControlBtn.disabled = true;
-      openControlBtn.dataset.prevText = openControlBtn.textContent || 'Control';
-      openControlBtn.textContent = 'Opening…';
-      openControlBtn.style.opacity = '0.75';
-      openControlBtn.style.cursor = 'wait';
-    } else {
-      openControlBtn.disabled = false;
-      openControlBtn.textContent = openControlBtn.dataset.prevText || 'Control';
-      openControlBtn.style.opacity = '';
-      openControlBtn.style.cursor = '';
-    }
-  }
-
   function showCenter(message, withSpinner = false, buttonText = null, buttonHandler = null, useCard = true) {
     contentEl.innerHTML = '';
     const wrap = document.createElement('div');
@@ -1388,22 +1369,6 @@
     refreshStats: showHome,
     openCommandsEditor: openCommandsEditor,
   };
-
-      if (openControlBtn) {
-        openControlBtn.onclick = () => {
-          if (openingControl) return;
-          openingControl = true;
-          setControlButtonLoading(true);
-          setStatus('connecting');
-          connText.textContent = 'Opening control…';
-
-          // Open control inline in the same Mini App WebView.
-          setTimeout(() => {
-            const url = `/oc/?token=${encodeURIComponent(jwt)}`;
-            window.location.assign(url);
-          }, 80);
-        };
-      }
 
       return true;
     } catch (e) {

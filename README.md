@@ -2,7 +2,7 @@
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-openclaw--tg--canvas-blue)](https://clawhub.ai/skills/openclaw-tg-canvas)
 
-Telegram Mini App server for OpenClaw-style workflows. It renders pushed content in a live canvas, optionally exposes a JWT-gated browser terminal via `ttyd`, and can proxy a local OpenClaw Control UI.
+Telegram Mini App server for OpenClaw-style workflows. It renders pushed content in a live canvas and can optionally expose a JWT-gated browser terminal via `ttyd`. The OpenClaw Control proxy remains in code, but it is disabled by default and not exposed in the Mini App UI.
 
 Links: [GitHub](https://github.com/gh1002-ow1/tg-canvas-studio) · [ClawHub](https://clawhub.ai/skills/openclaw-tg-canvas)
 
@@ -129,7 +129,7 @@ tg-canvas setup \
 | `COMMAND_RUN_ALLOWLIST` | No | empty | Comma-separated command ids for `safe` mode; `*` allows all fixed ids. |
 | `TTYD_PORT` | No | `7681` | Local ttyd listen port. |
 | `TTYD_PROXY_PORT` | No | `7681` | Port the canvas server proxies `/ttyd/*` to. |
-| `ENABLE_OPENCLAW_PROXY` | No | `false` | Enables `/oc/*` proxy only when set to the string `true`. |
+| `ENABLE_OPENCLAW_PROXY` | No | `false` | Enables `/oc/*` proxy only when set to the string `true`. Experimental and hidden from the Mini App UI by default. |
 | `OPENCLAW_PROXY_HOST` | No | `127.0.0.1` | Local OpenClaw gateway host. |
 | `OPENCLAW_PROXY_PORT` | No | `18789` | Local OpenClaw gateway port. |
 | `OPENCLAW_GATEWAY_TOKEN` | No | unset | Optional bearer token injected into proxied OpenClaw requests. |
@@ -247,6 +247,8 @@ sudo systemctl enable --now tg-canvas@main.service
 Keep only one startup model.
 
 ## OpenClaw Proxy
+
+This integration is currently experimental. The proxy code is retained for future use, but the Mini App does not show a `Control` entry point by default.
 
 Enable explicitly:
 

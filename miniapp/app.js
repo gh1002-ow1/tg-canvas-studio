@@ -231,16 +231,17 @@
       fileRootPath = normalizeFilePath(data.workspaceRoot || fileRootPath || '.');
       currentPath = normalizeFilePath(data.path || currentPath);
       if (pathEl) pathEl.textContent = currentPath;
+      const parentPath = data.parentPath ? normalizeFilePath(data.parentPath) : null;
 
       treeEl.innerHTML = '';
       
       // Add ".." for going up
-      if (currentPath !== '.' && currentPath !== '/') {
+      if (parentPath) {
         const upItem = document.createElement('div');
         upItem.className = 'file-item dir';
         upItem.innerHTML = '<span class="file-item-icon">📁</span><span class="file-item-name">..</span>';
         upItem.onclick = () => {
-          loadDirectory(normalizeFilePath(`${currentPath}/..`));
+          loadDirectory(parentPath);
         };
         treeEl.appendChild(upItem);
       }

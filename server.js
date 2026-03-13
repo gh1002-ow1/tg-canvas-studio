@@ -1108,6 +1108,12 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    function getParentPath(resolvedPath) {
+      const normalized = path.resolve(resolvedPath);
+      if (normalized === path.parse(normalized).root) return null;
+      return path.dirname(normalized);
+    }
+
     // GET /fs/tree?path=.
     if (req.method === "GET" && url.pathname === "/fs/tree") {
       const token = getJwtFromRequest(req, url);
@@ -1134,6 +1140,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, {
           path: fsPath.displayPath,
           absolute: fsPath.resolved,
+          parentPath: getParentPath(fsPath.resolved),
           workspaceRoot: WORKSPACE_ROOT,
           withinWorkspace: fsPath.withinWorkspace,
           items,

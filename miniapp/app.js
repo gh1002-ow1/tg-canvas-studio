@@ -246,7 +246,10 @@
       }
 
       if (!data.items || data.items.length === 0) {
-        treeEl.innerHTML = '<div class="files-empty">Empty directory</div>';
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'files-empty';
+        emptyEl.textContent = 'Empty directory';
+        treeEl.appendChild(emptyEl);
         return;
       }
 

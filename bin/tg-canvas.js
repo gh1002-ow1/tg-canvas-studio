@@ -155,6 +155,85 @@ function commandExists(bin) {
   return result.status === 0;
 }
 
+function detectPlatformInfo() {
+  try {
+    const text = fs.readFileSync("/etc/os-release", "utf8");
+    const parsed = parseEnvText(text);
+    return {
+      id: String(parsed.ID || "").toLowerCase(),
+      like: String(parsed.ID_LIKE || "").toLowerCase(),
+      pretty: parsed.PRETTY_NAME || parsed.NAME || process.platform,
+    };
+  } catch (_) {
+    return {
+      id: process.platform,
+      like: "",
+      pretty: process.platform,
+    };
+  }
+}
+
+function installerPlanFor(bin) {
+  const platform = detectPlatformInfo();
+  const isDebian = platform.id === "debian" || platform.id === "ubuntu" || platform.like.includes("debian");
+  const isRhel = ["rhel", "centos", "fedora", "rocky", "almalinux"].includes(platform.id) || platform.like.includes("rhel") || platform.like.includes("fedora");
+  const hasApt = commandExists("apt-get");
+  const hasDnf = commandExists("dnf");
+  const hasYum = commandExists("yum");
+  const hasBrew = commandExists("brew");
+
+  const packages = {
+    ttyd: "ttyd",
+    cloudflared: "cloudflared",
+  };
+  const pkg = packages[bin];
+  if (!pkg) return null;
+
+  if (isDebian && hasApt) {
+    return {
+      platform: platform.pretty,
+      steps: [
+        ["apt-get", ["update"]],
+        ["apt-get", ["install", "-y", pkg]],
+      ],
+    };
+  }
+  if (isRhel && hasDnf) {
+    return {
+      platform: platform.pretty,
+      steps: [["dnf", ["install", "-y", pkg]]],
+    };
+  }
+  if (isRhel && hasYum) {
+    return {
+      platform: platform.pretty,
+      steps: [["yum", ["install", "-y", pkg]]],
+    };
+  }
+  if (hasBrew) {
+    return {
+      platform: platform.pretty,
+      steps: [["brew", ["install", pkg]]],
+    };
+  }
+  return null;
+}
+
+function ensureDependency(bin) {
+  if (commandExists(bin)) return;
+  const plan = installerPlanFor(bin);
+  if (!plan) {
+    throw new Error(`${bin} is not installed and no supported automatic installer was detected`);
+  }
+  console.log(`Installing ${bin} for ${plan.platform}...`);
+  for (const [cmd, cmdArgs] of plan.steps) {
+    runCommand(cmd, cmdArgs, { sudo: true });
+  }
+  if (!commandExists(bin)) {
+    throw new Error(`${bin} installation finished but ${bin} is still not available on PATH`);
+  }
+}
+
 function detectOpenClawProxyPort() {
   const result = spawnSync("bash", ["-lc", "openclaw gateway status --deep 2>/dev/null || true"], {
     stdio: ["ignore", "pipe", "ignore"],
@@ -379,11 +458,11 @@ async function setupInstance() {
       throw new Error(`Instance already exists: ${config.instance} (${config.envPath})`);
     }
 
-    if (autoStart && !commandExists("ttyd")) {
-      throw new Error("ttyd is not installed or not on PATH; install ttyd before enabling terminal access");
+    if (autoStart) {
+      ensureDependency("ttyd");
     }
-    if (autoStart && exposure === "cloudflare" && !commandExists("cloudflared")) {
-      throw new Error("cloudflared is not installed or not on PATH");
+    if (autoStart && exposure === "cloudflare") {
+      ensureDependency("cloudflared");
     }
 
     runCommand("bash", [INSTALL_SCRIPT, "--user", serviceUser, "--root", projectRoot, "--quiet"], { cwd: projectRoot });

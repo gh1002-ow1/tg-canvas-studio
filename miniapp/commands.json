@@ -10,7 +10,7 @@
     },
     {
       "id": "git-status",
-      "type": "terminal",
+      "type": "exec",
       "label": "Git 状态",
       "icon": "🔍",
       "description": "查看当前目录 Git 状态",
@@ -18,7 +18,7 @@
     },
     {
       "id": "git-log",
-      "type": "terminal",
+      "type": "exec",
       "label": "Git 日志",
       "icon": "📝",
       "description": "查看最近的提交",
@@ -26,23 +26,23 @@
     },
     {
       "id": "ogs",
-      "type": "terminal",
+      "type": "exec",
       "label": "OGS",
       "icon": "🤖",
       "description": "查看 OpenClaw Gateway 状态",
-      "command": "openclaw gateway status --deep"
+      "command": "bash \"$TG_CANVAS_ROOT/scripts/openclaw-gateway-status.sh\" --deep"
     },
     {
       "id": "ogr",
-      "type": "terminal",
+      "type": "exec",
       "label": "OGR",
       "icon": "🔁",
       "description": "重启 OpenClaw Gateway",
-      "command": "openclaw gateway restart"
+      "command": "bash \"$TG_CANVAS_ROOT/scripts/openclaw-gateway-restart.sh\""
     },
     {
       "id": "server-logs",
-      "type": "terminal",
+      "type": "exec",
       "label": "服务日志",
       "icon": "📋",
       "description": "查看 TG Canvas 服务最近日志",
@@ -50,7 +50,7 @@
     },
     {
       "id": "check-services",
-      "type": "terminal",
+      "type": "exec",
       "label": "服务状态",
       "icon": "🔧",
       "description": "检查相关服务运行状态",

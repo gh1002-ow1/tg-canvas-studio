@@ -98,11 +98,13 @@ const WORKSPACE_ROOT = resolveWorkspaceRoot();
 function fixedCommandById(commandId, workspaceRoot) {
   const root = workspaceRoot || process.env.HOME || "/";
   const projectLogs = LOG_DIR;
+  const gatewayStatusScript = `${JSON.stringify(process.env.TG_CANVAS_ROOT || PROJECT_ROOT)}/scripts/openclaw-gateway-status.sh`;
+  const gatewayRestartScript = `${JSON.stringify(process.env.TG_CANVAS_ROOT || PROJECT_ROOT)}/scripts/openclaw-gateway-restart.sh`;
   const map = {
     "git-status": `cd ${JSON.stringify(root)} && git status`,
     "git-log": `cd ${JSON.stringify(root)} && git log --oneline -10`,
-    "ogs": "openclaw gateway status --deep",
-    "ogr": "openclaw gateway restart",
+    "ogs": `bash ${gatewayStatusScript} --deep`,
+    "ogr": `bash ${gatewayRestartScript}`,
     "openclaw-status": "openclaw models status",
     "server-logs": `tail -50 ${JSON.stringify(path.join(projectLogs, `tg-canvas-${INSTANCE_NAME}.log`))}`,
     "check-services": "systemctl --no-pager --type=service --state=running | rg -n \"(tg-canvas|ttyd-canvas|cloudflared-canvas)\" || true",
@@ -113,13 +115,18 @@ function fixedCommandById(commandId, workspaceRoot) {
 function fixedCommandByAlias(commandText, workspaceRoot) {
   const root = workspaceRoot || process.env.HOME || "/";
   const projectLogs = LOG_DIR;
+  const gatewayStatusScript = `${JSON.stringify(process.env.TG_CANVAS_ROOT || PROJECT_ROOT)}/scripts/openclaw-gateway-status.sh`;
+  const gatewayRestartScript = `${JSON.stringify(process.env.TG_CANVAS_ROOT || PROJECT_ROOT)}/scripts/openclaw-gateway-restart.sh`;
   const normalized = String(commandText || "").trim().toLowerCase().replace(/\s+/g, " ");
   const map = {
-    "ogs": "openclaw gateway status --deep",
-    "ogr": "openclaw gateway restart",
-    "openclaw gateway status": "openclaw gateway status",
-    "openclaw gateway status --deep": "openclaw gateway status --deep",
-    "openclaw gateway restart": "openclaw gateway restart",
+    "ogs": `bash ${gatewayStatusScript} --deep`,
+    "ogr": `bash ${gatewayRestartScript}`,
+    "openclaw gateway status": `bash ${gatewayStatusScript}`,
+    "openclaw gateway status --deep": `bash ${gatewayStatusScript} --deep`,
+    "openclaw gateway restart": `bash ${gatewayRestartScript}`,
+    [`bash ${gatewayStatusScript}`.toLowerCase()]: `bash ${gatewayStatusScript}`,
+    [`bash ${gatewayStatusScript} --deep`.toLowerCase()]: `bash ${gatewayStatusScript} --deep`,
+    [`bash ${gatewayRestartScript}`.toLowerCase()]: `bash ${gatewayRestartScript}`,
     "openclaw models status": "openclaw models status",
     "git status": `cd ${JSON.stringify(root)} && git status`,
     "git log --oneline -10": `cd ${JSON.stringify(root)} && git log --oneline -10`,
@@ -737,7 +744,7 @@ const server = http.createServer(async (req, res) => {
         if (!cmd) {
           return sendJson(res, 404, { error: "Command not found" });
         }
-        if (cmd.type !== "terminal") {
+        if (!["terminal", "exec"].includes(cmd.type)) {
           return sendJson(res, 400, { error: "Command is not executable" });
         }
         const workspaceRoot = WORKSPACE_ROOT;
@@ -833,14 +840,14 @@ const server = http.createServer(async (req, res) => {
           if (!cmd.id || !cmd.type || !cmd.label) {
             return sendJson(res, 400, { error: "Missing required fields" });
           }
-          if (!["navigate", "terminal"].includes(cmd.type)) {
+          if (!["navigate", "terminal", "exec"].includes(cmd.type)) {
             return sendJson(res, 400, { error: "Invalid command type" });
           }
           if (cmd.type === "navigate" && !cmd.path) {
             return sendJson(res, 400, { error: "Navigate command requires path" });
           }
-          if (cmd.type === "terminal" && !cmd.command) {
-            return sendJson(res, 400, { error: "Terminal command requires command" });
+          if ((cmd.type === "terminal" || cmd.type === "exec") && !cmd.command) {
+            return sendJson(res, 400, { error: "Command requires command" });
           }
         }
 

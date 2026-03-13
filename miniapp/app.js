@@ -420,6 +420,8 @@
       // Navigate to files with specific path
       showFileBrowser();
       loadDirectory(cmd.path);
+    } else if (cmd.type === 'exec') {
+      runQuickCommand(cmd);
     } else if (cmd.type === 'terminal') {
       openTerminalAndRun(cmd.command || '');
     }
@@ -836,12 +838,12 @@
     if (confirm('Reset to default commands? This will discard your changes.')) {
       const defaultCommands = [
         { id: 'open-workspace', type: 'navigate', label: 'Workspace', icon: '💼', description: '打开工作区根目录', path: '.' },
-        { id: 'git-status', type: 'terminal', label: 'Git 状态', icon: '🔍', description: '查看 Git 状态', command: 'git status' },
-        { id: 'git-log', type: 'terminal', label: 'Git 日志', icon: '📝', description: '查看最近的提交', command: 'git log --oneline -10' },
-        { id: 'ogs', type: 'terminal', label: 'OGS', icon: '🤖', description: '查看 OpenClaw Gateway 状态', command: 'openclaw gateway status --deep' },
-        { id: 'ogr', type: 'terminal', label: 'OGR', icon: '🔁', description: '重启 OpenClaw Gateway', command: 'openclaw gateway restart' },
-        { id: 'server-logs', type: 'terminal', label: '服务日志', icon: '📋', description: '查看 TG Canvas 服务最近日志', command: 'journalctl -u tg-canvas@main.service -n 50 --no-pager || journalctl -u tg-canvas.service -n 50 --no-pager' },
-        { id: 'check-services', type: 'terminal', label: '服务状态', icon: '🔧', description: '检查相关服务运行状态', command: 'systemctl --no-pager --type=service --state=running | rg -n "(tg-canvas|ttyd-canvas|cloudflared-canvas)" || true' },
+        { id: 'git-status', type: 'exec', label: 'Git 状态', icon: '🔍', description: '查看 Git 状态', command: 'git status' },
+        { id: 'git-log', type: 'exec', label: 'Git 日志', icon: '📝', description: '查看最近的提交', command: 'git log --oneline -10' },
+        { id: 'ogs', type: 'exec', label: 'OGS', icon: '🤖', description: '查看 OpenClaw Gateway 状态', command: 'bash "$TG_CANVAS_ROOT/scripts/openclaw-gateway-status.sh" --deep' },
+        { id: 'ogr', type: 'exec', label: 'OGR', icon: '🔁', description: '重启 OpenClaw Gateway', command: 'bash "$TG_CANVAS_ROOT/scripts/openclaw-gateway-restart.sh"' },
+        { id: 'server-logs', type: 'exec', label: '服务日志', icon: '📋', description: '查看 TG Canvas 服务最近日志', command: 'journalctl -u tg-canvas@main.service -n 50 --no-pager || journalctl -u tg-canvas.service -n 50 --no-pager' },
+        { id: 'check-services', type: 'exec', label: '服务状态', icon: '🔧', description: '检查相关服务运行状态', command: 'systemctl --no-pager --type=service --state=running | rg -n "(tg-canvas|ttyd-canvas|cloudflared-canvas)" || true' },
       ];
       localCommands = [...defaultCommands];
       renderCommandsList();

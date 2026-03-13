@@ -634,10 +634,14 @@
       if (!res.ok) throw new Error('Failed to load commands');
       const data = await res.json();
       quickCommands = data.commands || [];
+      defaultQuickCommands = data.defaults || [];
+      hasLocalCommandOverride = !!data.hasLocalOverride;
       console.log('[Canvas] Loaded quick commands:', quickCommands.length);
     } catch (err) {
       console.log('[Canvas] Commands error:', err.message);
       quickCommands = [];
+      defaultQuickCommands = [];
+      hasLocalCommandOverride = false;
     }
   }
 
@@ -675,6 +679,8 @@
   // ---------- Commands Editor Functions ----------
   let editingCommandId = null;
   let localCommands = [];
+  let defaultQuickCommands = [];
+  let hasLocalCommandOverride = false;
 
   async function openCommandsEditor() {
     await loadQuickCommands();
@@ -858,15 +864,29 @@
 
   async function resetCommands() {
     if (confirm('Reset to default commands? This will discard your changes.')) {
-      const defaultCommands = [
-        { id: 'open-workspace', type: 'navigate', label: 'Workspace', icon: '💼', description: '打开工作区根目录', path: fileRootPath || '.' },
-        { id: 'ogs', type: 'exec', label: 'OGS', icon: '🤖', description: '查看 OpenClaw Gateway 状态', command: 'bash "$TG_CANVAS_ROOT/scripts/openclaw-gateway-status.sh" --deep' },
-        { id: 'ogr', type: 'exec', label: 'OGR', icon: '🔁', description: '重启 OpenClaw Gateway', command: 'bash "$TG_CANVAS_ROOT/scripts/openclaw-gateway-restart.sh"' },
-        { id: 'server-logs', type: 'exec', label: '服务日志', icon: '📋', description: '查看 TG Canvas 服务最近日志', command: 'journalctl -u tg-canvas@main.service -n 50 --no-pager || journalctl -u tg-canvas.service -n 50 --no-pager' },
-        { id: 'check-services', type: 'exec', label: '服务状态', icon: '🔧', description: '检查相关服务运行状态', command: 'systemctl --no-pager --type=service --state=running | rg -n "(tg-canvas|ttyd-canvas|cloudflared-canvas)" || true' },
-      ];
-      localCommands = [...defaultCommands];
-      renderCommandsList();
+      try {
+        const res = await fetch('/api/commands/reset?token=' + encodeURIComponent(jwt), {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to reset');
+        }
+        const data = await res.json();
+        quickCommands = data.commands?.commands || [];
+        defaultQuickCommands = data.commands?.defaults || [];
+        hasLocalCommandOverride = !!data.commands?.hasLocalOverride;
+        localCommands = [...quickCommands];
+        renderCommandsList();
+      } catch (err) {
+        if (defaultQuickCommands.length > 0) {
+          localCommands = [...defaultQuickCommands];
+          hasLocalCommandOverride = false;
+          renderCommandsList();
+          return;
+        }
+        alert('Error resetting commands: ' + err.message);
+      }
     }
   }
 

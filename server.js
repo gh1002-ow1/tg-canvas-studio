@@ -195,6 +195,16 @@ function bundledCommandsConfig() {
   }
 }
 
+function readInstanceCommandsConfig() {
+  try {
+    if (!fs.existsSync(COMMANDS_FILE)) return null;
+    const data = fs.readFileSync(COMMANDS_FILE, "utf8");
+    return JSON.parse(data || "{}");
+  } catch (_) {
+    return null;
+  }
+}
+
 function sanitizeCommandsConfig(config) {
   const workspaceRoot = WORKSPACE_ROOT;
   const bundled = bundledCommandsConfig();
@@ -243,16 +253,18 @@ function normalizedProxyOrigin() {
 }
 
 function readCommandsConfig() {
-  try {
-    if (fs.existsSync(COMMANDS_FILE)) {
-      const data = fs.readFileSync(COMMANDS_FILE, "utf8");
-      return sanitizeCommandsConfig(JSON.parse(data || "{}"));
-    }
-  } catch (_) {
-    // Fall back to bundled defaults.
-  }
-
-  return sanitizeCommandsConfig(bundledCommandsConfig());
+  const defaults = sanitizeCommandsConfig(bundledCommandsConfig());
+  const instanceConfig = readInstanceCommandsConfig();
+  const commands = instanceConfig ? sanitizeCommandsConfig(instanceConfig) : defaults;
+  return {
+    commands: commands.commands || [],
+    defaults: defaults.commands || [],
+    hasLocalOverride: !!instanceConfig,
+    storage: {
+      template: DEFAULT_COMMANDS_PATH,
+      override: COMMANDS_FILE,
+    },
+  };
 }
 
 function isLoopbackAddress(addr) {
@@ -740,7 +752,15 @@ const server = http.createServer(async (req, res) => {
       try {
         return sendJson(res, 200, readCommandsConfig());
       } catch (err) {
-        return sendJson(res, 200, { commands: [] });
+        return sendJson(res, 200, {
+          commands: [],
+          defaults: [],
+          hasLocalOverride: false,
+          storage: {
+            template: DEFAULT_COMMANDS_PATH,
+            override: COMMANDS_FILE,
+          },
+        });
       }
     }
 
@@ -874,6 +894,25 @@ const server = http.createServer(async (req, res) => {
         fs.mkdirSync(path.dirname(COMMANDS_FILE), { recursive: true, mode: 0o700 });
         fs.writeFileSync(COMMANDS_FILE, content, "utf8");
         return sendJson(res, 200, { ok: true });
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/commands/reset") {
+      const token = getJwtFromRequest(req, url);
+      const payload = verifyJwt(token);
+      if (!payload) return sendJson(res, 401, { error: "Invalid token" });
+      if (!ALLOW_COMMANDS_WRITE) {
+        return sendJson(res, 403, {
+          error: "Commands are read-only",
+          hint: "Set ALLOW_COMMANDS_WRITE=true to enable command edits",
+        });
+      }
+
+      try {
+        fs.rmSync(COMMANDS_FILE, { force: true });
+        return sendJson(res, 200, { ok: true, commands: readCommandsConfig() });
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }

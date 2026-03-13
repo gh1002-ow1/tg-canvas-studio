@@ -134,7 +134,14 @@ tg-canvas setup \
 | `OPENCLAW_PROXY_PORT` | No | `18789` | Local OpenClaw gateway port. |
 | `OPENCLAW_GATEWAY_TOKEN` | No | unset | Optional bearer token injected into proxied OpenClaw requests. |
 | `TG_CANVAS_DATA_DIR` | No | `./var/<instance>` | Stores per-instance generated JWT secret and quick commands. |
-| `COMMANDS_FILE` | No | `<TG_CANVAS_DATA_DIR>/commands.json` | Per-instance quick command storage. |
+| `COMMANDS_FILE` | No | `<TG_CANVAS_DATA_DIR>/commands.json` | Per-instance quick command override storage; UI edits are written here instead of the repo template. |
+
+Quick commands are split into two layers:
+
+- Repo template: `miniapp/commands.json`
+- Instance override: `<TG_CANVAS_DATA_DIR>/commands.json`
+- Runtime edits and resets only touch the instance override
+- `var/` is gitignored, so machine-local command changes are not pushed unless you manually copy them back into `miniapp/commands.json`
 
 ## Security
 

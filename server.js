@@ -10,8 +10,155 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
-const { exec, execSync } = require("child_process");
+const { exec, execSync, spawn } = require("child_process");
 const { WebSocketServer } = require("ws");
+
+// ---- TunnelManager ----
+// Manages cloudflared tunnel lifecycle with auto-restart and URL detection
+class TunnelManager {
+  constructor(port, options = {}) {
+    this.port = port;
+    this.tunnelUrl = null;
+    this.tunnelProcess = null;
+    this.enabled = options.enabled !== false; // Default true
+    this.mode = options.mode || 'quick'; // 'quick' | 'named' | 'none'
+    this.tunnelName = options.tunnelName || null; // For named tunnel
+    this.restartDelay = options.restartDelay || 5000;
+    this.logPrefix = '[TunnelManager]';
+    this.broadcastUrl = options.broadcastUrl || (() => {});
+  }
+
+  start() {
+    if (!this.enabled || this.mode === 'none') {
+      console.log(`${this.logPrefix} Tunnel disabled`);
+      return;
+    }
+
+    if (this.tunnelProcess) {
+      console.log(`${this.logPrefix} Tunnel already running`);
+      return;
+    }
+
+    const args = this.mode === 'named' && this.tunnelName
+      ? ['tunnel', 'run', this.tunnelName]
+      : ['tunnel', '--url', `http://127.0.0.1:${this.port}`];
+
+    console.log(`${this.logPrefix} Starting cloudflared with args: ${args.join(' ')}`);
+
+    try {
+      this.tunnelProcess = spawn('cloudflared', args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: false
+      });
+
+      this.tunnelProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        this.parseOutput(output);
+      });
+
+      this.tunnelProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        this.parseOutput(output);
+      });
+
+      this.tunnelProcess.on('close', (code, signal) => {
+        console.log(`${this.logPrefix} Tunnel process exited (code: ${code}, signal: ${signal})`);
+        this.tunnelProcess = null;
+        this.tunnelUrl = null;
+        
+        // Auto-restart after delay
+        if (this.enabled && this.mode !== 'none') {
+          console.log(`${this.logPrefix} Restarting in ${this.restartDelay}ms...`);
+          setTimeout(() => this.start(), this.restartDelay);
+        }
+      });
+
+      this.tunnelProcess.on('error', (err) => {
+        console.error(`${this.logPrefix} Failed to start cloudflared: ${err.message}`);
+        this.tunnelProcess = null;
+      });
+
+    } catch (err) {
+      console.error(`${this.logPrefix} Exception starting tunnel: ${err.message}`);
+      this.tunnelProcess = null;
+    }
+  }
+
+  parseOutput(output) {
+    // Quick tunnel URL detection
+    const quickMatch = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    if (quickMatch) {
+      this.tunnelUrl = quickMatch[0];
+      console.log(`${this.logPrefix} Tunnel URL: ${this.tunnelUrl}`);
+      this.updateEnvFile();
+      this.broadcastUrl(this.tunnelUrl);
+    }
+
+    // Named tunnel ready detection
+    const namedMatch = output.match(/Connection\s+\w+\s+registered/);
+    if (namedMatch && this.tunnelName) {
+      console.log(`${this.logPrefix} Named tunnel '${this.tunnelName}' connected`);
+    }
+
+    // Log important messages
+    if (output.includes('ERR') || output.includes('error')) {
+      console.error(`${this.logPrefix} ${output.trim()}`);
+    }
+  }
+
+  updateEnvFile() {
+    if (!this.tunnelUrl) return;
+    
+    const envPath = path.join(PROJECT_ROOT, '.env');
+    try {
+      if (fs.existsSync(envPath)) {
+        let envContent = fs.readFileSync(envPath, 'utf8');
+        const lines = envContent.split('\n');
+        let found = false;
+        
+        const updated = lines.map(line => {
+          if (line.startsWith('MINIAPP_URL=')) {
+            found = true;
+            return `MINIAPP_URL=${this.tunnelUrl}`;
+          }
+          return line;
+        }).join('\n');
+        
+        if (!found) {
+          fs.writeFileSync(envPath, updated + `\nMINIAPP_URL=${this.tunnelUrl}\n`);
+        } else {
+          fs.writeFileSync(envPath, updated);
+        }
+        
+        console.log(`${this.logPrefix} Updated MINIAPP_URL in .env`);
+      }
+    } catch (err) {
+      console.error(`${this.logPrefix} Failed to update .env: ${err.message}`);
+    }
+  }
+
+  stop() {
+    if (this.tunnelProcess) {
+      console.log(`${this.logPrefix} Stopping tunnel...`);
+      this.enabled = false; // Prevent auto-restart
+      this.tunnelProcess.kill('SIGTERM');
+      this.tunnelProcess = null;
+      this.tunnelUrl = null;
+    }
+  }
+
+  getStatus() {
+    return {
+      enabled: this.enabled,
+      mode: this.mode,
+      url: this.tunnelUrl,
+      running: this.tunnelProcess !== null
+    };
+  }
+}
+
+// Global tunnel manager instance (initialized after server starts)
+let tunnelManager = null;
 
 // ---- Config ----
 const PROJECT_ROOT = __dirname;
@@ -973,12 +1120,14 @@ const server = http.createServer(async (req, res) => {
 
     // Health endpoint
     if (req.method === "GET" && url.pathname === "/health") {
+      const tunnelStatus = tunnelManager ? tunnelManager.getStatus() : { enabled: false, running: false, url: null };
       return sendJson(res, 200, {
         ok: true,
         version: APP_VERSION,
         uptime: process.uptime(),
         clients: wsClients.size,
         hasState: !!currentState,
+        tunnel: tunnelStatus,
       });
     }
 
@@ -1671,6 +1820,62 @@ setInterval(() => {
   broadcast({ type: "ping" });
 }, 30_000).unref();
 
+// Graceful shutdown handler
+function gracefulShutdown(signal) {
+  console.log(`\n[tg-canvas] Received ${signal}, shutting down gracefully...`);
+  
+  // Stop accepting new connections
+  server.close(() => {
+    console.log('[tg-canvas] HTTP server closed');
+  });
+  
+  // Close all WebSocket clients
+  for (const client of wsClients) {
+    client.close(1001, 'Server shutting down');
+  }
+  console.log(`[tg-canvas] Closed ${wsClients.size} WebSocket clients`);
+  
+  // Stop tunnel manager
+  if (tunnelManager) {
+    tunnelManager.stop();
+  }
+  
+  // Save any pending state
+  if (currentState) {
+    console.log('[tg-canvas] State saved');
+  }
+  
+  // Force exit after timeout
+  setTimeout(() => {
+    console.log('[tg-canvas] Forced exit');
+    process.exit(0);
+  }, 5000);
+  
+  // Exit immediately if everything is closed
+  process.exit(0);
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 server.listen(PORT, () => {
   console.log(`tg-canvas server listening on :${PORT}`);
+  
+  // Initialize and start tunnel manager
+  const tunnelEnabled = process.env.TUNNEL_ENABLED !== 'false';
+  const tunnelMode = process.env.TUNNEL_MODE || 'quick'; // 'quick' | 'named' | 'none'
+  const tunnelName = process.env.TUNNEL_NAME || null;
+  
+  tunnelManager = new TunnelManager(PORT, {
+    enabled: tunnelEnabled,
+    mode: tunnelMode,
+    tunnelName: tunnelName,
+    broadcastUrl: (url) => {
+      // Broadcast new tunnel URL to all connected WebSocket clients
+      broadcast({ type: 'tunnel_url', url: url });
+    }
+  });
+  
+  tunnelManager.start();
 });

@@ -58,10 +58,21 @@ sync_telegram_menu() {
   if [ -f "$TG_CANVAS_DIR/scripts/setup-bot.js" ]; then
     log "Syncing Telegram menu button..."
     cd "$TG_CANVAS_DIR"
-    if node scripts/setup-bot.js 2>&1 | while read -r line; do log "  $line"; done; then
+    
+    # Execute setup-bot.js and capture output + exit code
+    local output exit_code
+    output=$(node scripts/setup-bot.js 2>&1)
+    exit_code=$?
+    
+    # Print output line by line
+    while IFS= read -r line; do
+      log "  $line"
+    done <<< "$output"
+    
+    if [ $exit_code -eq 0 ]; then
       log "Telegram menu button synced"
     else
-      log "WARNING: Failed to sync Telegram menu button"
+      log "WARNING: Failed to sync Telegram menu button (exit code: $exit_code)"
     fi
   fi
 }

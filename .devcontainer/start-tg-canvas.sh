@@ -13,6 +13,19 @@ TUNNEL_LOG="$LOG_DIR/tunnel.log"
 
 mkdir -p "$LOG_DIR"
 
+# ---- Load .env early (fixes PORT availability issue) ----
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "WARNING: .env not found at $ENV_FILE"
+fi
+
+# Now PORT and other vars are available for the entire script
+PORT="${PORT:-3721}"
+
 # ---- Helper functions ----
 
 log() {
@@ -35,6 +48,21 @@ update_miniapp_url() {
       echo "MINIAPP_URL=$url" >> "$ENV_FILE"
     fi
     log "Updated MINIAPP_URL in $ENV_FILE"
+    
+    # Sync to Telegram menu button
+    sync_telegram_menu
+  fi
+}
+
+sync_telegram_menu() {
+  if [ -f "$TG_CANVAS_DIR/scripts/setup-bot.js" ]; then
+    log "Syncing Telegram menu button..."
+    cd "$TG_CANVAS_DIR"
+    if node scripts/setup-bot.js 2>&1 | while read -r line; do log "  $line"; done; then
+      log "Telegram menu button synced"
+    else
+      log "WARNING: Failed to sync Telegram menu button"
+    fi
   fi
 }
 
@@ -46,11 +74,6 @@ start_server() {
     return 0
   fi
 
-  if [ ! -f "$ENV_FILE" ]; then
-    log "ERROR: .env not found at $ENV_FILE"
-    return 1
-  fi
-
   cd "$TG_CANVAS_DIR"
 
   if [ ! -d "node_modules" ]; then
@@ -59,17 +82,12 @@ start_server() {
   fi
 
   log "Starting Node server..."
-  # Source env and start server
-  set -a
-  source "$ENV_FILE"
-  set +a
-  
   nohup node server.js > "$SERVER_LOG" 2>&1 &
   
   sleep 2
   
   if pgrep -f "node server.js" >/dev/null 2>&1; then
-    log "Node server started on port ${PORT:-3721}"
+    log "Node server started on port $PORT"
     return 0
   else
     log "ERROR: Failed to start Node server. Check $SERVER_LOG"
@@ -80,10 +98,8 @@ start_server() {
 # ---- Start Cloudflare tunnel ----
 
 start_tunnel() {
-  local port="${PORT:-3721}"
-  
-  if pgrep -f "cloudflared tunnel.*$port" >/dev/null 2>&1; then
-    log "Cloudflared tunnel already running"
+  if pgrep -f "cloudflared tunnel.*$PORT" >/dev/null 2>&1; then
+    log "Cloudflared tunnel already running for port $PORT"
     return 0
   fi
   
@@ -93,7 +109,7 @@ start_tunnel() {
   fi
   
   log "Starting Cloudflare tunnel..."
-  nohup cloudflared tunnel --url "http://127.0.0.1:$port" > "$TUNNEL_LOG" 2>&1 &
+  nohup cloudflared tunnel --url "http://127.0.0.1:$PORT" > "$TUNNEL_LOG" 2>&1 &
   
   # Wait for tunnel URL to appear (up to 15s)
   local url=""
@@ -115,6 +131,7 @@ start_tunnel() {
 
 main() {
   log "Starting TG Canvas for development..."
+  log "Port: $PORT"
   
   start_server || exit 1
   start_tunnel

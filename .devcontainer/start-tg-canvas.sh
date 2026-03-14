@@ -60,9 +60,13 @@ sync_telegram_menu() {
     cd "$TG_CANVAS_DIR"
     
     # Execute setup-bot.js and capture output + exit code
+    # Use 'if' to avoid set -e causing premature exit on failure
     local output exit_code
-    output=$(node scripts/setup-bot.js 2>&1)
-    exit_code=$?
+    if output=$(node scripts/setup-bot.js 2>&1); then
+      exit_code=0
+    else
+      exit_code=$?
+    fi
     
     # Print output line by line
     while IFS= read -r line; do

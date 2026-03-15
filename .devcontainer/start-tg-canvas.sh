@@ -61,6 +61,11 @@ start_server() {
 # ---- Start Cloudflare tunnel ----
 
 start_tunnel() {
+  if is_named_tunnel; then
+    log "Named tunnel mode detected (CLOUDFLARED_TUNNEL is set), skipping quick tunnel startup"
+    return 0
+  fi
+
   if [ -n "$(get_tunnel_pid)" ]; then
     log "Cloudflared tunnel already running"
     return 0

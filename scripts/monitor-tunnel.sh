@@ -134,13 +134,20 @@ show_status() {
   local current_url=$(get_tunnel_url)
   local stored_url=$(get_stored_url)
   local tunnel_type="quick tunnel"
+  local health=""
 
   if is_named_tunnel; then
     tunnel_type="named tunnel"
-    current_url="${stored_url:-<configured in Cloudflare>}"
+    if [ -n "$stored_url" ]; then
+      current_url="$stored_url"
+      health=$(check_tunnel_health "$current_url" || true)
+    else
+      current_url="<configured in Cloudflare>"
+      health="unknown (set MINIAPP_URL to enable health check)"
+    fi
+  else
+    health=$(check_tunnel_health "$current_url" || true)
   fi
-
-  local health=$(check_tunnel_health "$current_url")
 
   echo "=== TG Canvas Tunnel Status ==="
   echo "Type:       $tunnel_type"

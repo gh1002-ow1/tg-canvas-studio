@@ -15,18 +15,10 @@ log() {
 }
 
 # Check if using named tunnel (production) or quick tunnel (dev)
-# Named tunnel: CLOUDFLARED_TUNNEL env var is set
-# Quick tunnel: uses --url flag with random URL
+# Named tunnel: CLOUDFLARED_TUNNEL env var is explicitly set.
+# Quick tunnel: uses --url flag with random URL.
 is_named_tunnel() {
-  # Check environment variable
-  if [ -n "${CLOUDFLARED_TUNNEL:-}" ]; then
-    return 0
-  fi
-  # Check if process is running with "tunnel run" (named tunnel)
-  if pgrep -f "cloudflared tunnel run" >/dev/null 2>&1; then
-    return 0
-  fi
-  return 1
+  [ -n "${CLOUDFLARED_TUNNEL:-}" ]
 }
 
 # Get quick tunnel URL from log (only works for quick tunnel)
@@ -40,10 +32,15 @@ get_tunnel_url() {
 # For named tunnel: matches "tunnel run"
 get_tunnel_pid() {
   if is_named_tunnel; then
-    pgrep -f "cloudflared tunnel run" 2>/dev/null || echo ""
+    local tunnel_name="${CLOUDFLARED_TUNNEL:-}"
+    if [ -z "$tunnel_name" ]; then
+      echo ""
+      return 0
+    fi
+    pgrep -f "cloudflared tunnel run.*$tunnel_name" 2>/dev/null | head -n 1 || echo ""
   else
     local port="${PORT:-3721}"
-    pgrep -f "cloudflared tunnel.*--url.*$port" 2>/dev/null || echo ""
+    pgrep -f "cloudflared tunnel.*--url.*$port" 2>/dev/null | head -n 1 || echo ""
   fi
 }
 
